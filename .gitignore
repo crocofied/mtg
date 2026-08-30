@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local calibration, caches and captures
+calibration.json
+*.npz
+captures/
+frames/
+mtgtrack_markers.png
+*_preview.png

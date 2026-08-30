@@ -1,0 +1,477 @@
+{
+ "cards": [
+  {
+   "name": "Lightning Bolt",
+   "mana_cost": "{R}",
+   "cmc": 1,
+   "type_line": "Instant",
+   "oracle_text": "Lightning Bolt deals 3 damage to any target.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Counterspell",
+   "mana_cost": "{U}{U}",
+   "cmc": 2,
+   "type_line": "Instant",
+   "oracle_text": "Counter target spell.",
+   "colors": [
+    "U"
+   ],
+   "color_identity": [
+    "U"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Ragavan, Nimble Pilferer",
+   "mana_cost": "{R}",
+   "cmc": 1,
+   "type_line": "Legendary Creature \u2014 Monkey Pirate",
+   "oracle_text": "Whenever Ragavan deals combat damage to a player, create a Treasure token.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "2",
+   "toughness": "1",
+   "produced_mana": [],
+   "keywords": [
+    "Dash"
+   ],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Dragon's Rage Channeler",
+   "mana_cost": "{R}",
+   "cmc": 1,
+   "type_line": "Creature \u2014 Human Shaman",
+   "oracle_text": "Whenever you cast a noncreature spell, surveil 1.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "1",
+   "toughness": "1",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Murktide Regent",
+   "mana_cost": "{5}{U}",
+   "cmc": 6,
+   "type_line": "Creature \u2014 Dragon",
+   "oracle_text": "Delve. Flying. Murktide Regent enters with two +1/+1 counters on it.",
+   "colors": [
+    "U"
+   ],
+   "color_identity": [
+    "U"
+   ],
+   "power": "0",
+   "toughness": "0",
+   "produced_mana": [],
+   "keywords": [
+    "Flying",
+    "Delve"
+   ],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Expressive Iteration",
+   "mana_cost": "{U}{R}",
+   "cmc": 2,
+   "type_line": "Sorcery",
+   "oracle_text": "Look at the top three cards of your library. Put one into your hand and one onto the battlefield.",
+   "colors": [
+    "U",
+    "R"
+   ],
+   "color_identity": [
+    "U",
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Consider",
+   "mana_cost": "{U}",
+   "cmc": 1,
+   "type_line": "Instant",
+   "oracle_text": "Surveil 1. Draw a card.",
+   "colors": [
+    "U"
+   ],
+   "color_identity": [
+    "U"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Unholy Heat",
+   "mana_cost": "{R}",
+   "cmc": 1,
+   "type_line": "Instant",
+   "oracle_text": "Unholy Heat deals 2 damage to target creature or planeswalker.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Brazen Borrower",
+   "mana_cost": "{1}{U}{U}",
+   "cmc": 3,
+   "type_line": "Creature \u2014 Faerie Rogue",
+   "oracle_text": "Flash. Flying.",
+   "colors": [
+    "U"
+   ],
+   "color_identity": [
+    "U"
+   ],
+   "power": "3",
+   "toughness": "1",
+   "produced_mana": [],
+   "keywords": [
+    "Flash",
+    "Flying"
+   ],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Subtlety",
+   "mana_cost": "{2}{U}{U}",
+   "cmc": 4,
+   "type_line": "Creature \u2014 Elemental Incarnation",
+   "oracle_text": "Flash. Flying.",
+   "colors": [
+    "U"
+   ],
+   "color_identity": [
+    "U"
+   ],
+   "power": "3",
+   "toughness": "3",
+   "produced_mana": [],
+   "keywords": [
+    "Flash",
+    "Flying"
+   ],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Spell Pierce",
+   "mana_cost": "{U}",
+   "cmc": 1,
+   "type_line": "Instant",
+   "oracle_text": "Counter target noncreature spell unless its controller pays {2}.",
+   "colors": [
+    "U"
+   ],
+   "color_identity": [
+    "U"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Mishra's Bauble",
+   "mana_cost": "{0}",
+   "cmc": 0,
+   "type_line": "Artifact",
+   "oracle_text": "Look at the top card of any player's library. Draw a card.",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Steam Vents",
+   "mana_cost": "",
+   "cmc": 0,
+   "type_line": "Land \u2014 Island Mountain",
+   "oracle_text": "({T}: Add {U} or {R}.) As Steam Vents enters, you may pay 2 life.",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [
+    "U",
+    "R"
+   ],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Spirebluff Canal",
+   "mana_cost": "",
+   "cmc": 0,
+   "type_line": "Land",
+   "oracle_text": "{T}: Add {U} or {R}.",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [
+    "U",
+    "R"
+   ],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Scalding Tarn",
+   "mana_cost": "",
+   "cmc": 0,
+   "type_line": "Land",
+   "oracle_text": "{T}, Pay 1 life, Sacrifice Scalding Tarn: Search your library for an Island or Mountain card.",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Wooded Foothills",
+   "mana_cost": "",
+   "cmc": 0,
+   "type_line": "Land",
+   "oracle_text": "{T}, Pay 1 life, Sacrifice Wooded Foothills: Search your library for a Mountain or Forest card.",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Island",
+   "mana_cost": "",
+   "cmc": 0,
+   "type_line": "Basic Land \u2014 Island",
+   "oracle_text": "({T}: Add {U}.)",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [
+    "U"
+   ],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Mountain",
+   "mana_cost": "",
+   "cmc": 0,
+   "type_line": "Basic Land \u2014 Mountain",
+   "oracle_text": "({T}: Add {R}.)",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [
+    "R"
+   ],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Otawara, Soaring City",
+   "mana_cost": "",
+   "cmc": 0,
+   "type_line": "Legendary Land",
+   "oracle_text": "{T}: Add {U}.",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [
+    "U"
+   ],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Blood Moon",
+   "mana_cost": "{2}{R}",
+   "cmc": 3,
+   "type_line": "Enchantment",
+   "oracle_text": "Nonbasic lands are Mountains.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Engineered Explosives",
+   "mana_cost": "{X}",
+   "cmc": 0,
+   "type_line": "Artifact",
+   "oracle_text": "{T}, Sacrifice: Destroy each permanent with converted mana cost X.",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Flusterstorm",
+   "mana_cost": "{U}",
+   "cmc": 1,
+   "type_line": "Instant",
+   "oracle_text": "Counter target instant or sorcery spell unless its controller pays {1}.",
+   "colors": [
+    "U"
+   ],
+   "color_identity": [
+    "U"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  }
+ ]
+}
