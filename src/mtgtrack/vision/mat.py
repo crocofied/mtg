@@ -180,6 +180,10 @@ def solo_layout(size: tuple[int, int] = (1400, 815)) -> MatLayout:
                   _rect(MAIN_X[0], ROW_3[0], MAIN_X[1], ROW_3[1]), priority=1),
         MatRegion("player_lands", Zone.LANDS, Owner.PLAYER,
                   _rect(MAIN_X[0], ROW_4[0], MAIN_X[1], ROW_4[1]), priority=1),
+        # The far corner of the side column is free in a 60-card game and is
+        # where the general sits in Commander.
+        MatRegion("player_command", Zone.COMMAND, Owner.PLAYER,
+                  _rect(SIDE_X[0], ROW_1[0], SIDE_X[1], ROW_1[1]), stacked=True, priority=3),
         MatRegion("player_exile", Zone.EXILE, Owner.PLAYER,
                   _rect(SIDE_X[0], ROW_2[0], SIDE_X[1], ROW_2[1]), stacked=True, priority=3),
         MatRegion("player_library", Zone.LIBRARY, Owner.PLAYER,

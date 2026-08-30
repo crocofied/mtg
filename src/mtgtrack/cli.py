@@ -30,11 +30,12 @@ from .app import (
     GameLoop,
     Session,
     SetupError,
-    build_opponent,
+    build_opponents,
     build_session,
     card_source,
     load_deck,
     load_layout,
+    load_opponent_decks,
     open_camera,
 )
 from .config import DEFAULT_YAML, Config, default_config_dir
@@ -44,18 +45,23 @@ from .deck.parser import parse_decklist, summarise
 from .engine.game import EngineConfig, GameEngine
 from .indexing import build_index
 from .logging_setup import setup_logging
+from .models.formats import is_known, rules_for
 from .models.zones import Owner
 from .vision.calibration import (
     CalibrationError,
     MatCalibration,
+    calibrate_automatically,
     calibrate_from_corners,
     calibrate_from_markers,
     detect_markers,
-    find_mat_quad,
+    detect_rotation,
+    find_mat_candidates,
+    full_frame_calibration,
     generate_marker_sheet,
 )
-from .vision.capture import ListSource, open_source
+from .vision.capture import FrameTransform, ListSource, open_source
 from .vision.mat import default_layout
+from .vision.orientation import read_mat_orientation
 from .vision.overlay import draw_calibration_preview, draw_layout, draw_observation
 from .vision.pipeline import VisionPipeline
 
@@ -78,9 +84,11 @@ def _config(args: argparse.Namespace) -> Config:
     return config
 
 
-def _grab_frame(source_spec: str, warmup: int = 5) -> np.ndarray:
+def _grab_frame(
+    source_spec: str, warmup: int = 5, transform: FrameTransform | None = None
+) -> np.ndarray:
     """Read one frame, discarding the first few so auto-exposure settles."""
-    source = open_source(source_spec)
+    source = open_source(source_spec, transform=transform)
     try:
         frame = None
         for _ in range(max(1, warmup)):
@@ -156,57 +164,165 @@ def cmd_markers(args: argparse.Namespace) -> int:
 
 
 def cmd_calibrate(args: argparse.Namespace) -> int:
+    """Work out where the mat is, and which way up the camera is mounted.
+
+    Markerless by default: the mat is the big rectangle on the table, so it can
+    simply be found.  Markers, explicit corners and a whole-frame fallback are
+    all still available when the table refuses to cooperate.
+    """
     config = _config(args)
-    frame = (
+    size = tuple(config.mat.size)
+    mm = tuple(config.mat.mm)
+
+    raw = (
         cv2.imread(str(args.image))
         if args.image
         else _grab_frame(config.camera.source, warmup=args.warmup)
     )
-    if frame is None:
+    if raw is None:
         raise SetupError(f"could not read {args.image}")
-    size = tuple(config.mat.size)
-    mm = tuple(config.mat.mm)
 
-    calibration: MatCalibration | None = None
-    if args.corners:
-        points = _parse_corners(args.corners)
-        calibration = calibrate_from_corners(points, size, mm)
-        _print("calibrated from the corners you gave")
-    else:
-        try:
-            calibration = calibrate_from_markers(frame, size, mm)
-            _print(f"calibrated from ArUco markers {sorted(detect_markers(frame))}")
-        except CalibrationError as exc:
-            _print(f"marker calibration failed: {exc}")
-            if not args.auto:
-                _print("retry with the markers visible, or use --auto / --corners")
-                return 1
-            quad = find_mat_quad(frame)
-            if quad is None:
-                _print("automatic mat detection found no rectangle either")
-                return 1
-            calibration = calibrate_from_corners(quad, size, mm)
-            _print("calibrated from the largest rectangle in view -- please verify the preview")
+    transform = _resolve_rotation(raw, args, mm)
+    frame = transform.apply(raw)
+    if not transform.is_identity:
+        _print(f"camera correction: {transform.describe()}")
+
+    calibration = _build_calibration(frame, args, size, mm, transform)
+    _print(f"calibration source: {calibration.source}")
+    calibration = _orient_mat(calibration, frame, args)
 
     path = calibration.save(config.calibration)
-    _print(f"calibration written to {path}")
-    _print(f"a card should measure {calibration.expected_card_size()[0]:.0f}"
-           f"x{calibration.expected_card_size()[1]:.0f} px in mat space")
+    width, height = calibration.expected_card_size()
+    _print(f"written to {path}")
+    _print(f"a card will measure {width:.0f}x{height:.0f} px in mat space")
 
-    if args.preview:
-        preview = draw_calibration_preview(frame, np.array(calibration.src_points))
-        rectified = draw_layout(calibration.rectify(frame), load_layout(config))
-        cv2.imwrite(str(args.preview), preview)
-        rectified_path = Path(args.preview).with_name(Path(args.preview).stem + "_mat.png")
-        cv2.imwrite(str(rectified_path), rectified)
-        _print(f"preview: {args.preview} and {rectified_path}")
+    preview = args.preview or str(Path(config.calibration).with_suffix(".preview.png"))
+    _write_previews(raw, frame, calibration, config, preview)
+    _print(f"preview: {preview} (and *_mat.png showing the zones)")
+    _print(
+        "\nCheck the mat preview: your hand tray belongs at the TOP, your lands "
+        "at the BOTTOM.\nIf it came out the wrong way round, re-run with "
+        "--upside-down."
+    )
     return 0
 
 
+def _orient_mat(
+    calibration: MatCalibration, frame: np.ndarray, args: argparse.Namespace
+) -> MatCalibration:
+    """Work out which edge of the mat the player sits at.
+
+    A rectangle looks the same from both ends, so the cards decide it: their art
+    is at the top and their text box at the bottom, which points at the player.
+    Put a few cards on the mat the way you would play them and this needs no
+    input at all.
+    """
+    if args.upside_down:
+        _print("turning the mat around as requested")
+        return calibration.turned_around()
+    if args.no_auto_orient:
+        return calibration
+
+    verdict = read_mat_orientation(
+        calibration.rectify(frame), calibration.expected_card_size()
+    )
+    _print(f"orientation: {verdict.describe()}")
+    if verdict.votes == 0:
+        _print(
+            "    tip: lay a few cards face up on the mat and calibrate again, "
+            "then the orientation is worked out for you"
+        )
+        return calibration
+    if not verdict.certain:
+        _print("    not certain enough to act on -- check the preview")
+        return calibration
+    if verdict.upright:
+        return calibration
+    _print("    turning the mat around so you are at the bottom")
+    return calibration.turned_around()
+
+
+def _resolve_rotation(
+    raw: np.ndarray, args: argparse.Namespace, mm: tuple[float, float]
+) -> FrameTransform:
+    """Decide how the frame has to be turned before anything else happens."""
+    flip = args.flip or ""
+    if args.rotate == "auto":
+        rotation, score = detect_rotation(raw, mm[0] / mm[1])
+        if score <= 0:
+            _print("could not tell which way the camera is mounted; assuming upright")
+            rotation = 0
+        else:
+            _print(f"detected camera rotation: {rotation} deg clockwise to correct it")
+        return FrameTransform(rotate=rotation, flip=flip)
+    return FrameTransform(rotate=int(args.rotate), flip=flip)
+
+
+def _build_calibration(
+    frame: np.ndarray,
+    args: argparse.Namespace,
+    size: tuple[int, int],
+    mm: tuple[float, float],
+    transform: FrameTransform,
+) -> MatCalibration:
+    """Pick a calibration method: explicit corners, markers, auto, full frame."""
+    if args.corners:
+        return calibrate_from_corners(_parse_corners(args.corners), size, mm, transform)
+    if args.full_frame:
+        _print("using the whole frame as the mat")
+        return full_frame_calibration(frame, size, mm, transform)
+
+    if args.markers:
+        calibration = calibrate_from_markers(frame, size, mm, transform=transform)
+        _print(f"found ArUco markers {sorted(detect_markers(frame))}")
+        return calibration
+
+    # Markers are used automatically when they happen to be there, because they
+    # are more precise than anything we can infer.
+    try:
+        calibration = calibrate_from_markers(frame, size, mm, transform=transform)
+        _print(f"found ArUco markers {sorted(detect_markers(frame))}")
+        return calibration
+    except CalibrationError:
+        pass
+
+    candidates = find_mat_candidates(frame, mm[0] / mm[1])
+    if candidates:
+        _print("mat candidates (best first):")
+        for candidate in candidates[:3]:
+            _print(
+                f"    score {candidate.score:.2f}  aspect {candidate.aspect:.2f}  "
+                f"{candidate.area_fraction:.0%} of frame  via {candidate.strategy}"
+                + ("  [touches the frame edge]" if candidate.touches_border else "")
+            )
+    calibration, best = calibrate_automatically(frame, size, mm, transform=transform)
+    if best.touches_border:
+        _print(
+            "warning: the mat runs off the edge of the picture. Move the camera "
+            "back so the whole mat is visible, or the outer zones will be cut off."
+        )
+    return calibration
+
+
+def _write_previews(
+    raw: np.ndarray,
+    frame: np.ndarray,
+    calibration: MatCalibration,
+    config: Config,
+    preview: str,
+) -> None:
+    """Two pictures: the detected outline, and the mat with its zones."""
+    annotated = draw_calibration_preview(frame, np.array(calibration.src_points))
+    Path(preview).parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(preview, annotated)
+    rectified = draw_layout(calibration.rectify(frame), load_layout(config))
+    cv2.imwrite(str(Path(preview).with_name(Path(preview).stem + "_mat.png")), rectified)
+
+
 def _parse_corners(text: str) -> list[list[float]]:
-    parts = text.replace(";", " ").split()
+    """Four ``x,y`` pairs from the command line, in any order."""
     points = []
-    for part in parts:
+    for part in text.replace(";", " ").split():
         x, _, y = part.partition(",")
         points.append([float(x), float(y)])
     if len(points) != 4:
@@ -239,21 +355,51 @@ def cmd_layout(args: argparse.Namespace) -> int:
 
 
 def cmd_import(args: argparse.Namespace) -> int:
+    """Resolve the player's decklist, and any AI decklists, then build the index.
+
+    Only the player is scanned, so only the player's deck needs a recognition
+    index.  The AI decks are resolved for their card data alone, which is why
+    importing three Commander opponents costs almost nothing.
+    """
     config = _config(args)
+    config.deck.format = args.format
+    source = card_source(config, offline=args.offline)
+
     path = Path(args.decklist).expanduser()
     entries = parse_decklist(path.read_text(encoding="utf-8"))
     _print(f"parsed {len(entries)} lines: {summarise(entries)}")
 
-    source = card_source(config, offline=args.offline)
     deck = load_and_resolve(path, source, name=args.name or path.stem, format=args.format)
     _print(deck.summary())
     for problem in deck.validate():
         _print(f"  ! {problem}")
 
     config.deck.path = str(path)
-    config.deck.format = args.format
-    target = deck.save(config.deck_json)
-    _print(f"resolved deck cached at {target}")
+    _print(f"resolved deck cached at {deck.save(config.deck_json)}")
+
+    opponent_paths = [str(Path(p).expanduser()) for p in (args.opponent or [])]
+    for spec in opponent_paths:
+        opponent_path = Path(spec)
+        if not opponent_path.exists():
+            raise SetupError(f"opponent decklist not found: {opponent_path}")
+        opponent = load_and_resolve(
+            opponent_path, source, name=opponent_path.stem, format=args.format
+        )
+        _print(f"opponent: {opponent.summary()}")
+        for problem in opponent.validate():
+            _print(f"  ! {problem}")
+        opponent.save(config.deck_cache / f"{opponent_path.stem}.json")
+    if opponent_paths:
+        config.opponent.decks = opponent_paths
+        config.opponent.deck = ""
+
+    rules = rules_for(args.format)
+    if rules.multiplayer and len(opponent_paths) < rules.default_players - 1:
+        _print(
+            f"note: {rules.name} seats {rules.default_players} players; "
+            f"{rules.default_players - 1 - len(opponent_paths)} AI seat(s) will "
+            "mirror your deck. Pass --opponent again to give them their own."
+        )
 
     if not args.no_images and not args.offline:
         _print("downloading card art ...")
@@ -272,7 +418,13 @@ def cmd_import(args: argparse.Namespace) -> int:
     else:
         _print(
             "\nadd this to your config, or re-run with --save-config:"
-            f"\n  deck:\n    path: {path}"
+            f"\n  deck:\n    path: {path}\n    format: {args.format}"
+            + (
+                "\n  opponent:\n    decks:\n"
+                + "\n".join(f"      - {p}" for p in opponent_paths)
+                if opponent_paths
+                else ""
+            )
         )
     return 0
 
@@ -291,7 +443,7 @@ def cmd_index(args: argparse.Namespace) -> int:
 def cmd_run(args: argparse.Namespace) -> int:
     config = _config(args)
     session = build_session(config, offline=args.offline, rebuild_index=args.rebuild_index)
-    source = open_camera(config)
+    source = open_camera(config, session.calibration)
     loop = GameLoop(session, source)
     return _play(loop, config, overlay=args.overlay or config.ui.overlay,
                  web=not args.no_web and config.ui.web, max_frames=args.frames)
@@ -313,6 +465,10 @@ def cmd_demo(args: argparse.Namespace) -> int:
 
     config = _config(args)
     config.camera.process_fps = 1000.0  # the demo is not rate limited
+    if getattr(args, "format", None):
+        if not is_known(args.format):
+            raise SetupError(f"unknown format {args.format!r}")
+        config.deck.format = args.format
     if config.deck.path:
         deck = load_deck(config, offline=True)
     else:
@@ -322,7 +478,9 @@ def cmd_demo(args: argparse.Namespace) -> int:
                 "no deck configured and no bundled example found; "
                 "point deck.path at a decklist or pass --deck"
             )
-        deck = load_and_resolve(example, OfflineClient(), name=example.stem)
+        deck = load_and_resolve(
+            example, OfflineClient(), name=example.stem, format=config.deck.format
+        )
     _print(deck.summary())
 
     camera = DemoCamera(deck, layout=default_layout(tuple(config.mat.size)), seed=args.seed)
@@ -340,12 +498,19 @@ def cmd_demo(args: argparse.Namespace) -> int:
         deck,
         card_width_px=camera.card_width,
         config=EngineConfig(tracker=config.tracker, inference=config.inference),
+        opponent_decks=load_opponent_decks(config, deck, offline=True),
     )
-    opponent = build_opponent(config, deck, offline=True)
+    opponent_decks = load_opponent_decks(config, deck, offline=True)
+    opponents = build_opponents(config, opponent_decks, offline=True)
     session = Session(config, deck, index, camera.layout, camera.calibration,
-                      engine, opponent, pipeline)
+                      engine, opponents, pipeline)
     loop = GameLoop(session, ListSource(frames))
     loop.start_game()
+    seats = engine.state.seats
+    _print(
+        f"table ({deck.format}): "
+        + ", ".join(f"{s.name} ({s.life})" for s in seats)
+    )
 
     _print("\n--- scripted game ---")
     for index_, frame in enumerate(frames):
@@ -353,8 +518,8 @@ def cmd_demo(args: argparse.Namespace) -> int:
             _print(f"\n[{labels[index_]}]")
         for event in loop.step(frame):
             _print(f"   {event.describe()}")
-    _print("\n--- opponent takes a turn ---")
-    for action in loop.opponent_turn():
+    _print("\n--- the AI seats take their turns ---")
+    for action in loop.opponent_round():
         _print(f"   {action.describe()}")
 
     state = engine.state
@@ -367,6 +532,14 @@ def cmd_demo(args: argparse.Namespace) -> int:
     _print(f"   mana         {engine.mana_pool().describe()}")
     castable = [c.card.name for c in engine.castable_from_hand()]
     _print(f"   castable     {', '.join(castable) if castable else '-'}")
+    if len(state.seats) > 2:
+        _print("\n--- the table ---")
+        for side in state.seats:
+            general = side.commander.card.name if side.commander else "-"
+            _print(
+                f"   seat {side.seat}  {side.name:22} life {side.life:3}  "
+                f"board {len(side.battlefield()):2}  commander {general}"
+            )
 
     if args.web:
         from .ui.web import serve
@@ -484,13 +657,29 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--size", type=int, default=400, help="marker size in pixels")
     p.set_defaults(func=cmd_markers)
 
-    p = sub.add_parser("calibrate", help="work out where the mat is")
+    p = sub.add_parser(
+        "calibrate",
+        help="work out where the mat is (no markers needed)",
+    )
     p.add_argument("--source", help="camera index, video or image folder")
     p.add_argument("--image", help="calibrate from a still image instead")
+    p.add_argument(
+        "--rotate",
+        default="auto",
+        choices=["auto", "0", "90", "180", "270"],
+        help="degrees clockwise to straighten a sideways camera (default: detect)",
+    )
+    p.add_argument("--flip", choices=["h", "v", "hv"], help="mirror the frame")
     p.add_argument("--corners", help='four "x,y" pairs, in any order')
-    p.add_argument("--auto", action="store_true",
-                   help="fall back to detecting the largest rectangle")
-    p.add_argument("--preview", help="write an annotated preview image")
+    p.add_argument("--markers", action="store_true",
+                   help="require ArUco markers instead of finding the mat")
+    p.add_argument("--full-frame", action="store_true",
+                   help="treat the whole picture as the mat")
+    p.add_argument("--upside-down", action="store_true",
+                   help="you are sitting at the other end of the detected mat")
+    p.add_argument("--no-auto-orient", action="store_true",
+                   help="do not work out the player's side from the cards")
+    p.add_argument("--preview", help="where to write the preview images")
     p.add_argument("--warmup", type=int, default=5)
     p.add_argument("--calibration", help="where to write the calibration")
     p.set_defaults(func=cmd_calibrate)
@@ -503,10 +692,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--source")
     p.set_defaults(func=cmd_layout)
 
-    p = sub.add_parser("import", help="resolve a decklist and build the index")
-    p.add_argument("decklist")
+    p = sub.add_parser("import", help="resolve your decklist (and the AI's) and build the index")
+    p.add_argument("decklist", help="your decklist -- the one the camera will see")
+    p.add_argument(
+        "--opponent",
+        action="append",
+        metavar="DECKLIST",
+        help="an AI opponent's decklist; repeat for several (Commander)",
+    )
     p.add_argument("--name")
-    p.add_argument("--format", default="modern")
+    p.add_argument("--format", default="modern",
+                   help="modern, standard, legacy, commander, ...")
     p.add_argument("--offline", action="store_true", help="use the bundled card database")
     p.add_argument("--no-images", action="store_true")
     p.add_argument("--no-index", action="store_true")
@@ -542,6 +738,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("demo", help="run a scripted game without a camera")
     p.add_argument("--deck")
+    p.add_argument("--format", help="override the format, e.g. commander")
     p.add_argument("--seed", type=int, default=7)
     p.add_argument("--web", action="store_true", help="also serve the dashboard")
     p.set_defaults(func=cmd_demo)

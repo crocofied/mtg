@@ -50,3 +50,14 @@ def demo_camera(deck: Deck, layout) -> DemoCamera:
 @pytest.fixture(scope="session")
 def demo_steps(deck: Deck):
     return scripted_game(deck)
+
+
+@pytest.fixture(autouse=True)
+def _deterministic_camera(request):
+    """Rewind the synthetic camera before every test.
+
+    Its sensor noise advances with each frame, so without this a test would
+    quietly depend on how many frames the tests before it happened to grab.
+    """
+    if "demo_camera" in request.fixturenames:
+        request.getfixturevalue("demo_camera").camera.reset()

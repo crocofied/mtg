@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import random
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from ..deck.deck import Deck
@@ -24,7 +24,7 @@ from ..engine.mana import ManaPool
 from ..models.card import Card, CardInstance
 from ..models.events import EventType, GameEvent
 from ..models.gamestate import GameState, PlayerState
-from ..models.zones import Owner, Zone
+from ..models.zones import Zone
 from .base import ActionKind, OpponentAction, OpponentEngine
 
 log = logging.getLogger(__name__)
@@ -33,7 +33,12 @@ _DAMAGE_RE = re.compile(r"deals? (\d+) damage", re.IGNORECASE)
 _DRAW_RE = re.compile(r"draw (\w+) cards?", re.IGNORECASE)
 _LIFE_RE = re.compile(r"gain (\d+) life", re.IGNORECASE)
 _WORD_NUMBERS = {"a": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
-_TARGET_CREATURE_RE = re.compile(r"target (creature|permanent|planeswalker)", re.IGNORECASE)
+_TARGET_PERMANENT_RE = re.compile(
+    r"target ([a-z]+?)(?:s\b|\b)(?: you don't control)?", re.IGNORECASE
+)
+_TARGETABLE = {
+    "creature", "permanent", "planeswalker", "artifact", "enchantment", "land", "battle",
+}
 _FETCH_RE = re.compile(
     r"search your library for (?:an?\s+)?(.+?) card", re.IGNORECASE | re.DOTALL
 )
@@ -83,14 +88,22 @@ class AIConfig:
 
 
 class BuiltinAI(OpponentEngine):
-    """A lightweight but genuine Magic opponent."""
+    """A lightweight but genuine Magic opponent.
+
+    One instance plays one seat.  In a two-player game that is seat 1; in
+    Commander there are three of them, at seats 1 to 3, each with its own deck,
+    library and hand, all choosing targets among everyone else at the table.
+    """
 
     name = "builtin"
 
-    def __init__(self, deck: Deck, config: AIConfig | None = None) -> None:
+    def __init__(self, deck: Deck, config: AIConfig | None = None, seat: int = 1) -> None:
         self.deck = deck
         self.config = config or AIConfig()
-        self.random = random.Random(self.config.seed)
+        self.seat = seat
+        self.random = random.Random(
+            None if self.config.seed is None else self.config.seed + seat
+        )
         self.state: GameState | None = None
         self.side: PlayerState | None = None
         self.library: list[CardInstance] = []
@@ -99,16 +112,23 @@ class BuiltinAI(OpponentEngine):
     # ------------------------------------------------------------------ setup
     def start(self, state: GameState) -> list[OpponentAction]:
         self.state = state
-        self.side = state.opponent
-        self.side.name = self.deck.name
+        self.side = state.seat(self.seat)
+        # The engine names seats so several AIs on one decklist can be told
+        # apart; only fill in a placeholder.
+        if self.side.name in ("", "AI", "Player", f"AI {self.seat}"):
+            self.side.name = f"AI {self.seat}: {self.deck.name}"
+        self.side.life = state.rules.starting_life
         self.side.instances.clear()
+        self.side.commander = None
+        self.side.commander_casts = 0
         self.library = [
             CardInstance(card=card, zone=Zone.LIBRARY) for card in self.deck.iter_maindeck_cards()
         ]
         self.random.shuffle(self.library)
         actions: list[OpponentAction] = []
+        actions.extend(self._setup_command_zone())
 
-        hand_size = self.config.starting_hand
+        hand_size = state.rules.starting_hand
         for mulligan in range(self.config.max_mulligans + 1):
             self._draw(hand_size)
             if self._keepable() or mulligan == self.config.max_mulligans:
@@ -127,6 +147,24 @@ class BuiltinAI(OpponentEngine):
             hand_size -= 1
         self.side.library_count = len(self.library)
         return actions
+
+    def _setup_command_zone(self) -> list[OpponentAction]:
+        """Put the general where it belongs before the game starts."""
+        assert self.side is not None and self.state is not None
+        if not self.state.rules.command_zone:
+            return []
+        commanders = self.deck.commanders
+        if not commanders:
+            return []
+        instance = CardInstance(card=commanders[0], zone=Zone.COMMAND)
+        self.side.add(instance)
+        self.side.commander = instance
+        return [
+            OpponentAction(
+                ActionKind.MESSAGE, card_name=instance.card.name,
+                text=f"commands {instance.card.name}",
+            )
+        ]
 
     def _keepable(self) -> bool:
         """A hand is keepable with 2-5 lands, roughly."""
@@ -159,9 +197,11 @@ class BuiltinAI(OpponentEngine):
     def take_turn(self, state: GameState) -> list[OpponentAction]:
         """Untap, draw, develop the board, attack, pass."""
         self.state = state
-        self.side = state.opponent
+        self.side = state.seat(self.seat)
         if not self.library and not self.side.instances:
             self.start(state)
+        if self.side.lost:
+            return []
 
         actions: list[OpponentAction] = []
         self._untap()
@@ -173,7 +213,8 @@ class BuiltinAI(OpponentEngine):
             )
         elif self.side.library_count == 0:
             actions.append(OpponentAction(ActionKind.CONCEDE, text="decks out and loses"))
-            state.winner = Owner.PLAYER
+            self.side.lost = True
+            state.check_losses()
             return actions
 
         actions.extend(self._play_land())
@@ -226,11 +267,44 @@ class BuiltinAI(OpponentEngine):
         """Do not throw removal at an empty board."""
         assert self.state is not None
         text = (card.oracle_text or "").lower()
-        if not _TARGET_CREATURE_RE.search(text):
+        match = next(
+            (
+                m
+                for m in _TARGET_PERMANENT_RE.finditer(text)
+                if m.group(1).lower().rstrip("s") in _TARGETABLE
+            ),
+            None,
+        )
+        if not match:
             return True
         if "any target" in text or "target player" in text:
             return True
-        return bool(self.state.player.creatures())
+        return self._best_permanent_target(match.group(1))[0] is not None
+
+    def _best_permanent_target(
+        self, wanted: str
+    ) -> tuple[CardInstance | None, PlayerState | None]:
+        """The best permanent of the named type that someone else controls."""
+        assert self.state is not None
+        wanted = wanted.strip().lower()
+        if wanted in ("creature", "creatures"):
+            return self._best_removal_target(99)
+
+        def matches(card: Card) -> bool:
+            if wanted in ("permanent", "permanents"):
+                return card.is_permanent
+            return card.has_type(wanted.rstrip("s"))
+
+        options: list[tuple[CardInstance, PlayerState]] = []
+        for other in self.state.others(self.seat):
+            options.extend(
+                (permanent, other)
+                for permanent in other.battlefield()
+                if matches(permanent.card)
+            )
+        if not options:
+            return None, None
+        return max(options, key=lambda pair: self._value(pair[0].card))
 
     def _crack_fetchland(self, fetch: CardInstance) -> str | None:
         """Sacrifice a fetchland and put the land it looks for into play."""
@@ -269,11 +343,12 @@ class BuiltinAI(OpponentEngine):
         actions: list[OpponentAction] = []
         for _ in range(8):  # bounded: each pass casts at most one spell
             pool = ManaPool.from_permanents(self.side.battlefield())
+            playable = self.side.hand() + self._castable_commanders(pool)
             options = [
                 c
-                for c in self.side.hand()
+                for c in playable
                 if not c.card.is_land
-                and pool.can_pay(c.card.cost)
+                and self._affordable(pool, c)
                 and self._has_legal_target(c.card)
             ]
             if self.config.hold_interaction:
@@ -286,9 +361,32 @@ class BuiltinAI(OpponentEngine):
             actions.append(self._cast(options[0], pool))
         return actions
 
+    def _castable_commanders(self, pool: ManaPool) -> list[CardInstance]:
+        """The general, if it is in the command zone and affordable with tax."""
+        assert self.side is not None
+        if self.side.commander is None or self.side.commander.zone is not Zone.COMMAND:
+            return []
+        return [self.side.commander]
+
+    def _commander_tax(self, instance: CardInstance) -> int:
+        assert self.side is not None and self.state is not None
+        if self.side.commander is None or instance is not self.side.commander:
+            return 0
+        return self.side.commander_casts * self.state.rules.commander_tax
+
+    def _affordable(self, pool: ManaPool, instance: CardInstance) -> bool:
+        cost = instance.card.cost
+        tax = self._commander_tax(instance)
+        if tax:
+            cost = replace(cost, generic=cost.generic + tax)
+        return pool.can_pay(cost)
+
     def _cast(self, instance: CardInstance, pool: ManaPool) -> OpponentAction:
         assert self.side is not None and self.state is not None
-        self._pay(pool, instance.card)
+        from_command = instance.zone is Zone.COMMAND
+        if from_command:
+            self.side.commander_casts += 1
+        self._pay(pool, instance.card, extra=self._commander_tax(instance))
         targets = self._resolve_effects(instance.card)
         if instance.card.is_permanent:
             instance.zone = Zone.LANDS if instance.card.is_land else Zone.BATTLEFIELD
@@ -303,12 +401,15 @@ class BuiltinAI(OpponentEngine):
             detail={"mana_cost": instance.card.mana_cost},
         )
 
-    def _pay(self, pool: ManaPool, card: Card) -> None:
+    def _pay(self, pool: ManaPool, card: Card, extra: int = 0) -> None:
         assert self.side is not None
-        payment = pool.payment_for(card.cost)
+        cost = card.cost
+        if extra:
+            cost = replace(cost, generic=cost.generic + extra)
+        payment = pool.payment_for(cost)
         if payment is None:
             return
-        needed = card.cost.cmc
+        needed = cost.cmc
         for instance_id, _ in payment[:needed]:
             target = self.side.find(instance_id)
             if target is not None:
@@ -319,31 +420,43 @@ class BuiltinAI(OpponentEngine):
         """Apply the parts of a card's text the AI understands."""
         assert self.state is not None and self.side is not None
         text = card.oracle_text or ""
+        lowered = text.lower()
         targets: list[str] = []
-        player = self.state.player
+        opponents = self.state.others(self.seat)
+
+        if "each opponent" in lowered:
+            damage = _DAMAGE_RE.search(text)
+            if damage:
+                amount = int(damage.group(1))
+                for other in opponents:
+                    other.take_damage(amount, self.seat)
+                targets.extend(other.name for other in opponents)
 
         damage = _DAMAGE_RE.search(text)
-        if damage:
+        if damage and "each opponent" not in lowered:
             amount = int(damage.group(1))
-            victim = self._best_removal_target(amount)
-            if victim is not None:
+            victim, owner = self._best_removal_target(amount)
+            if victim is not None and owner is not None:
                 targets.append(victim.card.name)
-                player.move(victim.instance_id, Zone.GRAVEYARD)
-            elif "any target" in text.lower() or "player" in text.lower():
-                player.life -= amount
-                targets.append("you")
+                owner.move(victim.instance_id, Zone.GRAVEYARD)
+            elif "any target" in lowered or "player" in lowered:
+                target = self._preferred_opponent()
+                if target is not None:
+                    target.take_damage(amount, self.seat)
+                    targets.append(target.name)
 
-        if re.search(r"destroy target (creature|permanent|artifact|enchantment)", text, re.I):
-            victim = self._best_removal_target(99)
-            if victim is not None:
+        destroy = re.search(r"destroy target ([a-z ]+?)(?: you don't control)?\b", text, re.I)
+        if destroy:
+            victim, owner = self._best_permanent_target(destroy.group(1))
+            if victim is not None and owner is not None:
                 targets.append(victim.card.name)
-                player.move(victim.instance_id, Zone.GRAVEYARD)
+                owner.move(victim.instance_id, Zone.GRAVEYARD)
 
         if re.search(r"exile target creature", text, re.I):
-            victim = self._best_removal_target(99)
-            if victim is not None:
+            victim, owner = self._best_removal_target(99)
+            if victim is not None and owner is not None:
                 targets.append(victim.card.name)
-                player.move(victim.instance_id, Zone.EXILE)
+                owner.move(victim.instance_id, Zone.EXILE)
 
         draw = _DRAW_RE.search(text)
         if draw and "opponent" not in text.lower():
@@ -356,16 +469,51 @@ class BuiltinAI(OpponentEngine):
             self.side.life += int(life.group(1))
         return targets
 
-    def _best_removal_target(self, max_toughness: int) -> CardInstance | None:
+    def _best_removal_target(
+        self, max_toughness: int
+    ) -> tuple[CardInstance | None, PlayerState | None]:
+        """The scariest creature anyone else controls, and who controls it."""
         assert self.state is not None
-        creatures = [
-            c
-            for c in self.state.player.creatures()
-            if 0 < effective_stats(c.card)[1] <= max_toughness
-        ]
-        if not creatures:
+        options: list[tuple[CardInstance, PlayerState]] = []
+        for other in self.state.others(self.seat):
+            options.extend(
+                (creature, other)
+                for creature in other.creatures()
+                if 0 < effective_stats(creature.card)[1] <= max_toughness
+            )
+        if not options:
+            return None, None
+        return max(options, key=lambda pair: self._value(pair[0].card))
+
+    def _preferred_opponent(self, for_combat: bool = False) -> PlayerState | None:
+        """Which seat to point damage at.
+
+        In a multiplayer game every bot picking "lowest life" means every bot
+        picking the same seat, and three AIs ganging up on the human every
+        single game is neither fair nor fun.  So the choice weighs how close a
+        seat is to dying against how well defended it is, with a little noise on
+        top, which spreads the aggression the way a real table does.
+        """
+        assert self.state is not None and self.side is not None
+        opponents = self.state.others(self.seat)
+        if not opponents:
             return None
-        return max(creatures, key=lambda c: self._value(c.card))
+        if len(opponents) == 1:
+            return opponents[0]
+
+        def threat(side: PlayerState) -> float:
+            starting = max(1, self.state.rules.starting_life)
+            vulnerability = 1.0 - side.life / starting
+            defence = sum(
+                self._value(c.card) for c in side.creatures() if not c.tapped
+            ) / 10.0
+            power = sum(self._value(c.card) for c in side.creatures()) / 10.0
+            score = vulnerability * 1.6 + power * 0.8
+            if for_combat:
+                score -= defence * 0.9
+            return score + self.random.uniform(0.0, 0.45)
+
+        return max(opponents, key=threat)
 
     def _value(self, card: Card) -> float:
         """A rough "how good is this card" score used for every decision."""
@@ -402,22 +550,98 @@ class BuiltinAI(OpponentEngine):
         ]
         if not attackers:
             return []
-        blockers = [c for c in self.state.player.creatures() if not c.tapped]
+        defender = self._preferred_opponent(for_combat=True)
+        if defender is None:
+            return []
+        blockers = [c for c in defender.creatures() if not c.tapped]
         chosen = [c for c in attackers if self._should_attack(c, blockers)]
         if not chosen:
             return []
         for creature in chosen:
             creature.tapped = True
         damage = sum(effective_stats(c.card)[0] for c in chosen)
-        # Blockers are the player's job; unblocked damage is applied when the
-        # human confirms combat in the UI, so here we only propose the attack.
-        return [
-            OpponentAction(
-                ActionKind.ATTACK,
-                targets=[c.card.name for c in chosen],
-                detail={"potential_damage": damage},
+        detail: dict[str, Any] = {
+            "potential_damage": damage,
+            "defender": defender.name,
+            "defender_seat": defender.seat,
+        }
+        text = f"attacks {defender.name} with " + ", ".join(c.card.name for c in chosen)
+
+        if defender.seat == 0:
+            # The human blocks on the physical table, so the attack is only
+            # proposed here; damage lands when they confirm it.
+            return [OpponentAction(ActionKind.ATTACK, targets=[c.card.name for c in chosen],
+                                   detail=detail, text=text)]
+
+        outcome = self._resolve_combat(chosen, defender)
+        detail.update(outcome)
+        if outcome["damage"]:
+            text += f" for {outcome['damage']}"
+        if outcome["casualties"]:
+            text += " (" + ", ".join(outcome["casualties"]) + " dies)"
+        return [OpponentAction(ActionKind.ATTACK, targets=[c.card.name for c in chosen],
+                               detail=detail, text=text)]
+
+    def _resolve_combat(
+        self, attackers: list[CardInstance], defender: PlayerState
+    ) -> dict[str, Any]:
+        """Fight it out between two AI seats.
+
+        Only used when no human is defending: without this, bots would attack
+        each other forever and nobody's life total would ever move.
+        """
+        assert self.side is not None and self.state is not None
+        available = sorted(
+            (c for c in defender.creatures() if not c.tapped and not c.summoning_sick),
+            key=lambda c: -self._value(c.card),
+        )
+        casualties: list[str] = []
+        damage = 0
+        commander_damage = 0
+
+        for attacker in sorted(attackers, key=lambda c: -self._value(c.card)):
+            power, toughness = effective_stats(attacker.card)
+            blocker = self._choose_blocker(available, power, toughness)
+            if blocker is None:
+                damage += power
+                if self.side.commander is not None and attacker is self.side.commander:
+                    commander_damage += power
+                continue
+            available.remove(blocker)
+            b_power, b_toughness = effective_stats(blocker.card)
+            if b_power >= toughness:
+                casualties.append(attacker.card.name)
+                self.side.move(attacker.instance_id, Zone.GRAVEYARD)
+            if power >= b_toughness:
+                casualties.append(blocker.card.name)
+                defender.move(blocker.instance_id, Zone.GRAVEYARD)
+
+        if damage:
+            defender.take_damage(damage, self.seat)
+        if commander_damage:
+            defender.commander_damage[self.seat] = (
+                defender.commander_damage.get(self.seat, 0) + commander_damage
             )
-        ]
+        self.state.check_losses()
+        return {"damage": damage, "casualties": casualties}
+
+    def _choose_blocker(
+        self, available: list[CardInstance], power: int, toughness: int
+    ) -> CardInstance | None:
+        """A block worth making: it kills the attacker, or saves more than it costs."""
+        best: CardInstance | None = None
+        best_gain = 0.0
+        for blocker in available:
+            b_power, b_toughness = effective_stats(blocker.card)
+            kills = b_power >= toughness
+            dies = power >= b_toughness
+            gain = (self._value(blocker.card) if kills else 0.0) - (
+                self._value(blocker.card) if dies else 0.0
+            )
+            gain += power * 0.25  # damage prevented is worth something too
+            if gain > best_gain:
+                best, best_gain = blocker, gain
+        return best
 
     def _should_attack(self, creature: CardInstance, blockers: list[CardInstance]) -> bool:
         power, toughness = effective_stats(creature.card)
@@ -434,9 +658,11 @@ class BuiltinAI(OpponentEngine):
         return self.random.random() < self.config.aggression * 0.4
 
     def respond(self, state: GameState, event: GameEvent) -> list[OpponentAction]:
-        """Interact at instant speed with what the human just did."""
+        """Interact at instant speed with what someone else just did."""
         self.state = state
-        self.side = state.opponent
+        self.side = state.seat(self.seat)
+        if self.side.lost:
+            return []
         if event.type not in (EventType.SPELL_CAST, EventType.ATTACK_DECLARED):
             return []
         pool = ManaPool.from_permanents(self.side.battlefield())
@@ -478,9 +704,10 @@ class BuiltinAI(OpponentEngine):
 
     def status(self) -> dict[str, Any]:
         if self.side is None:
-            return {"ready": False}
+            return {"ready": False, "seat": self.seat}
         return {
             "ready": True,
+            "seat": self.seat,
             "deck": self.deck.name,
             "library": len(self.library),
             "hand": len(self.side.hand()),

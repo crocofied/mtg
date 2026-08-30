@@ -204,15 +204,30 @@ class VisionPipeline:
         return float(diff.mean())
 
     def recalibrate(self, frame: np.ndarray) -> bool:
-        """Re-derive the homography from ArUco markers; returns success."""
-        from .calibration import calibrate_from_markers
+        """Re-derive the homography from the current frame; returns success.
 
+        Markers are used when they are there, otherwise the mat is found the
+        markerless way.  Either way this lets a nudged camera heal itself
+        between turns instead of quietly ruining every zone assignment.
+        """
+        from .calibration import calibrate_automatically, calibrate_from_markers
+
+        size = self.calibration.mat_size
+        mm = self.calibration.mat_mm
+        transform = self.calibration.transform
+        new = None
         try:
-            new = calibrate_from_markers(
-                frame, mat_size=self.calibration.mat_size, mat_mm=self.calibration.mat_mm
-            )
-        except Exception as exc:  # noqa: BLE001 - calibration is best effort here
-            log.debug("recalibration skipped: %s", exc)
+            new = calibrate_from_markers(frame, mat_size=size, mat_mm=mm, transform=transform)
+        except Exception:  # noqa: BLE001 - no markers is the normal case
+            try:
+                new, _ = calibrate_automatically(
+                    frame, mat_size=size, mat_mm=mm, transform=transform
+                )
+            except Exception as exc:  # noqa: BLE001 - recalibration is best effort
+                log.debug("recalibration skipped: %s", exc)
+                return False
+        if _moved_too_far(self.calibration, new):
+            log.warning("ignoring a recalibration that moved the mat implausibly far")
             return False
         self.calibration = new
         self.detector = CardDetector(
@@ -220,6 +235,19 @@ class VisionPipeline:
         )
         log.info("camera recalibrated from markers")
         return True
+
+
+def _moved_too_far(old: MatCalibration, new: MatCalibration, limit: float = 0.25) -> bool:
+    """Guard against a bad re-detection throwing the whole mat away.
+
+    A camera that got knocked moves a little; a mis-detection usually snaps to
+    something entirely different, and accepting that would be worse than
+    keeping a slightly stale homography.
+    """
+    before = np.asarray(old.src_points, dtype=np.float32)
+    after = np.asarray(new.src_points, dtype=np.float32)
+    span = float(np.linalg.norm(before.max(axis=0) - before.min(axis=0))) or 1.0
+    return bool(np.linalg.norm(after - before, axis=1).max() > span * limit)
 
 
 def hand_mask(mat: np.ndarray, min_area: int = 4000) -> np.ndarray:

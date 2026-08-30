@@ -21,6 +21,7 @@ from ..deck.deck import Deck
 from ..deck.parser import normalise_name
 from ..models.card import Card, CardInstance
 from ..models.events import EventType, GameEvent
+from ..models.formats import rules_for
 from ..models.gamestate import GameState, PlayerState
 from ..models.zones import Owner, Zone
 from ..vision.pipeline import Observation
@@ -53,11 +54,16 @@ class GameEngine:
         card_width_px: float,
         config: EngineConfig | None = None,
         opponent_deck: Deck | None = None,
+        opponent_decks: list[Deck] | None = None,
     ) -> None:
         self.deck = deck
-        self.opponent_deck = opponent_deck
+        decks = list(opponent_decks) if opponent_decks else []
+        if opponent_deck is not None and not decks:
+            decks = [opponent_deck]
+        self.opponent_decks = decks
+        self.opponent_deck = decks[0] if decks else None
         self.config = config or EngineConfig()
-        self.state = GameState()
+        self.state = self._new_state()
         self.tracker = CardTracker(card_width_px, self.config.tracker)
         self.inferencer = EventInferencer(self.config.inference)
         self.events: list[GameEvent] = []
@@ -70,19 +76,60 @@ class GameEngine:
         self._last_mana_total: int | None = None
         self.state.player.library_count = deck.main_count
 
+    @property
+    def format(self) -> str:
+        return self.deck.format
+
+    def _new_state(self) -> GameState:
+        """A table sized for the format: 1v1 for Modern, four seats for EDH."""
+        rules = rules_for(self.deck.format)
+        names = [self.deck.name or "You"]
+        opponents = [d.name for d in self.opponent_decks] or ["AI"]
+        while len(opponents) < min(rules.default_players, rules.max_players) - 1:
+            opponents.append("AI")
+        # Several AIs on the same list would otherwise be indistinguishable in
+        # the log and the dashboard.
+        names += [f"AI {index}: {name}" for index, name in enumerate(opponents, start=1)]
+        return GameState.for_players(names[: rules.max_players], self.deck.format)
+
     # ------------------------------------------------------------------ setup
     def start_game(self) -> GameEvent:
-        self.state = GameState()
+        self.state = self._new_state()
         self.state.started = True
         self.state.player.name = self.deck.name
         self.state.player.library_count = self.deck.main_count
-        if self.opponent_deck is not None:
-            self.state.opponent.name = self.opponent_deck.name
-            self.state.opponent.library_count = self.opponent_deck.main_count
+        for index, deck in enumerate(self.opponent_decks, start=1):
+            if index < len(self.state.seats):
+                self.state.seats[index].name = f"AI {index}: {deck.name}"
+                self.state.seats[index].library_count = deck.main_count
+        self._seat_commander()
         self.tracker.reset()
         self._previous = None
         self._instances.clear()
-        return self._emit(GameEvent(type=EventType.GAME_START, detail={"deck": self.deck.name}))
+        return self._emit(
+            GameEvent(
+                type=EventType.GAME_START,
+                detail={
+                    "deck": self.deck.name,
+                    "format": self.deck.format,
+                    "seats": [s.name for s in self.state.seats],
+                },
+            )
+        )
+
+    def _seat_commander(self) -> None:
+        """Put the player's own general in the command zone.
+
+        The camera will see it there on the mat; registering it up front means
+        the first sighting is recognised as the commander rather than as a
+        stray card in an unexpected zone.
+        """
+        commanders = self.deck.commanders
+        if not commanders:
+            return
+        instance = CardInstance(card=commanders[0], zone=Zone.COMMAND)
+        self.state.player.add(instance)
+        self.state.player.commander = instance
 
     def subscribe(self, listener: EventListener) -> None:
         self.listeners.append(listener)
@@ -103,8 +150,11 @@ class GameEngine:
             events.append(mana_event)
 
         self.state.turn = self.inferencer.turn.turn
-        self.state.active_player = self.inferencer.turn.active_player
         self.state.phase = self.inferencer.turn.phase
+        # Turns read off the mat can only be the player's own: the AI seats
+        # have no cards on the table to untap.
+        if self.inferencer.turn.active_player is Owner.PLAYER:
+            self.state.active_seat = 0
         return [self._emit(event) for event in events]
 
     # ------------------------------------------------------------ state sync
@@ -168,12 +218,18 @@ class GameEngine:
 
     def _update_library_counts(self) -> None:
         """Deck size minus everything we can account for is the library."""
+        commander_ids = (
+            {self.state.player.commander.instance_id}
+            if self.state.player.commander is not None
+            else set()
+        )
         accounted = sum(
             1
             for inst in self.state.player.instances.values()
-            if inst.zone is not Zone.LIBRARY
+            if inst.zone is not Zone.LIBRARY and inst.instance_id not in commander_ids
         )
-        self.state.player.library_count = max(0, self.deck.main_count - accounted)
+        library = len(list(self.deck.iter_maindeck_cards()))
+        self.state.player.library_count = max(0, library - accounted)
 
     # ------------------------------------------------------------- diagnostics
     def _deck_consistency_events(self) -> list[GameEvent]:
@@ -250,7 +306,9 @@ class GameEngine:
                 "format": self.deck.format,
                 "main": self.deck.main_count,
                 "side": self.deck.side_count,
+                "commanders": [c.name for c in self.deck.commanders],
             },
+            "rules": rules_for(self.deck.format).to_dict(),
         }
 
     # ----------------------------------------------------------------- manual
@@ -260,12 +318,20 @@ class GameEngine:
             GameEvent(type=EventType.LIFE_CHANGED, owner=owner, detail={"life": life})
         )
 
-    def next_turn(self, owner: Owner | None = None) -> GameEvent:
-        target = owner or (
-            Owner.OPPONENT if self.state.active_player is Owner.PLAYER else Owner.PLAYER
+    def next_turn(self, owner: Owner | None = None, seat: int | None = None) -> GameEvent:
+        """Advance the turn, going round the table in seat order."""
+        if seat is None:
+            seat = (
+                self.state.next_seat()
+                if owner is None
+                else (0 if owner is Owner.PLAYER else 1)
+            )
+        self.state.begin_turn(seat)
+        event = self.inferencer.begin_turn(
+            Owner.PLAYER if seat == 0 else Owner.OPPONENT
         )
-        event = self.inferencer.begin_turn(target)
-        self.state.begin_turn(target)
+        event.detail["seat"] = seat
+        event.detail["name"] = self.state.seat(seat).name
         return self._emit(event)
 
     def set_phase(self, phase: str) -> GameEvent:
@@ -273,12 +339,15 @@ class GameEngine:
         self.state.phase = phase
         return self._emit(event)
 
-    def record_opponent_action(self, text: str, detail: dict[str, Any] | None = None) -> GameEvent:
+    def record_opponent_action(
+        self, text: str, detail: dict[str, Any] | None = None, seat: int = 1
+    ) -> GameEvent:
+        name = self.state.seat(seat).name if seat < len(self.state.seats) else "AI"
         return self._emit(
             GameEvent(
                 type=EventType.OPPONENT_ACTION,
                 owner=Owner.OPPONENT,
-                detail={"text": text, **(detail or {})},
+                detail={"text": text, "seat": seat, "name": name, **(detail or {})},
             )
         )
 

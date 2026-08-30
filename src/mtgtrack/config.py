@@ -45,6 +45,12 @@ class CameraConfig:
     fps: int = 30
     fourcc: str = "MJPG"
     autofocus: bool = False
+    #: Degrees clockwise needed to put a sideways-mounted camera upright.
+    #: -1 means "use whatever the calibration recorded", which is the default
+    #: because `mtgtrack calibrate` works it out for you.
+    rotate: int = -1
+    #: "h", "v" or "" -- for a camera looking at the mat through a mirror.
+    flip: str = ""
     #: Process at most this many frames per second; the rest are dropped.
     process_fps: float = 8.0
 
@@ -72,7 +78,11 @@ class DeckConfig:
 class OpponentConfig:
     #: "builtin", "forge" or "none".
     engine: str = "builtin"
+    #: The AI's decklist.  Empty means "mirror the player's deck".
     deck: str = ""
+    #: Several decklists = several AI opponents, which is what Commander needs.
+    #: Takes precedence over ``deck``.
+    decks: list[str] = field(default_factory=list)
     host: str = "127.0.0.1"
     port: int = DEFAULT_PORT
     skill: float = 0.85
@@ -106,6 +116,9 @@ class Config:
     inference: InferenceConfig = field(default_factory=InferenceConfig)
     cache_dir: str = ""
     calibration: str = ""
+    #: Where this configuration was read from, so ``save()`` writes it back to
+    #: the same file rather than silently creating a second one.
+    source_path: str = ""
     #: "default" or "robust" -- the robust set adds a slower edge pass.
     detector_profile: str = "default"
     log_level: str = "INFO"
@@ -115,6 +128,8 @@ class Config:
             self.cache_dir = str(default_cache_dir())
         if not self.calibration:
             self.calibration = str(default_config_dir() / "calibration.json")
+        if isinstance(self.opponent.decks, str):  # a single path in the YAML
+            self.opponent.decks = [self.opponent.decks]
         if self.detector_profile == "robust":
             self.detector.passes = ROBUST_PASSES
         elif self.detector_profile == "default":
@@ -146,6 +161,7 @@ class Config:
         data = asdict(self)
         # EdgePass tuples are implementation detail, not user configuration.
         data["detector"].pop("passes", None)
+        data.pop("source_path", None)
         return data
 
     @classmethod
@@ -163,11 +179,13 @@ class Config:
             return cls()
         data = yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
         config = cls.from_dict(data)
+        config.source_path = str(candidate)
         log.debug("loaded configuration from %s", candidate)
         return config
 
     def save(self, path: str | Path | None = None) -> Path:
-        target = Path(path).expanduser() if path else default_config_dir() / "config.yaml"
+        target = Path(path or self.source_path or default_config_dir() / "config.yaml")
+        target = target.expanduser()
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(
             yaml.safe_dump(self.to_dict(), sort_keys=False, allow_unicode=True), encoding="utf-8"
@@ -208,26 +226,29 @@ def _nested_type(spec: Any) -> type | None:
 
 
 DEFAULT_YAML = """\
-# mtgtrack configuration -- see docs/configuration.md
+# mtgtrack configuration -- see docs/konfiguration.md
 camera:
   source: "0"          # camera index, video file, image folder or RTSP URL
   width: 1920
   height: 1080
   process_fps: 8.0     # detection runs this often; the camera can be faster
+  rotate: -1           # -1 = take it from the calibration, else 0/90/180/270
+  flip: ""             # "h" or "v" if the camera looks through a mirror
 
 mat:
   layout: solo         # solo (vs AI) | versus (two players) | path to a JSON layout
   size: [1400, 815]    # mat-space resolution
   mm: [610.0, 355.0]   # physical playmat size
-  recalibrate_every: 0 # >0 re-reads the ArUco markers every N frames
+  recalibrate_every: 0 # >0 re-finds the mat every N frames, markers or not
 
 deck:
   path: ""             # your decklist, e.g. ~/decks/murktide.txt
-  format: modern
+  format: modern       # modern | standard | pioneer | legacy | vintage | commander
 
 opponent:
   engine: builtin      # builtin | forge | none
   deck: ""             # the AI's decklist; defaults to a mirror of yours
+  decks: []            # several decklists = several AI opponents (Commander)
   host: 127.0.0.1
   port: 8731
   skill: 0.85

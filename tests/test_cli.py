@@ -112,6 +112,113 @@ def test_missing_decklist_is_reported_clearly(tmp_path, capsys):
     assert "decklist not found" in capsys.readouterr().out
 
 
+def test_import_resolves_two_decklists(tmp_path):
+    """Only the human is scanned, so only the human's deck gets an index."""
+    config = Config.from_dict({"cache_dir": str(tmp_path)})
+    config_path = config.save(tmp_path / "config.yaml")
+    code = main([
+        "-c", str(config_path), "import", str(EXAMPLES / "izzet_murktide.txt"),
+        "--opponent", str(EXAMPLES / "izzet_murktide.txt"),
+        "--offline", "--no-images", "--save-config",
+    ])
+    assert code == 0
+    saved = Config.load(config_path)
+    assert saved.opponent.decks == [str(EXAMPLES / "izzet_murktide.txt")]
+    assert (tmp_path / "indexes" / "izzet_murktide.npz").exists()
+
+
+def test_import_seats_three_ais_for_commander(tmp_path, capsys):
+    config = Config.from_dict({"cache_dir": str(tmp_path)})
+    config_path = config.save(tmp_path / "config.yaml")
+    commander = str(EXAMPLES / "krenko_commander.txt")
+    code = main([
+        "-c", str(config_path), "import", commander, "--format", "commander",
+        "--opponent", commander, "--opponent", commander, "--opponent", commander,
+        "--offline", "--no-images", "--no-index", "--save-config",
+    ])
+    assert code == 0
+    assert "commander: Krenko, Mob Boss" in capsys.readouterr().out
+    saved = Config.load(config_path)
+    assert saved.deck.format == "commander"
+    assert len(saved.opponent.decks) == 3
+
+
+def test_save_config_writes_back_to_the_file_it_was_given(tmp_path):
+    config = Config.from_dict({"cache_dir": str(tmp_path)})
+    config_path = config.save(tmp_path / "elsewhere.yaml")
+    main([
+        "-c", str(config_path), "import", str(EXAMPLES / "izzet_murktide.txt"),
+        "--offline", "--no-images", "--no-index", "--save-config",
+    ])
+    assert Config.load(config_path).deck.path.endswith("izzet_murktide.txt")
+
+
+def test_calibrate_finds_the_mat_without_markers(tmp_path, demo_camera, demo_steps):
+    import numpy as np
+
+    from mtgtrack.vision.calibration import MatCalibration
+
+    config = Config.from_dict({"cache_dir": str(tmp_path)})
+    config.calibration = str(tmp_path / "calib.json")
+    config_path = config.save(tmp_path / "config.yaml")
+    frame = demo_camera.camera.capture(demo_camera.renderer.render(demo_steps[2].cards))
+    image = tmp_path / "frame.png"
+    cv2.imwrite(str(image), frame)
+
+    assert main(["-c", str(config_path), "calibrate", "--image", str(image)]) == 0
+    calibration = MatCalibration.load(tmp_path / "calib.json")
+    assert calibration.source == "auto"
+    # The corners must be the mat's, whichever end was picked as the near one.
+    found = np.array(sorted(map(tuple, calibration.src_points)))
+    truth = np.array(sorted(map(tuple, demo_camera.camera.corners.tolist())))
+    assert np.abs(found - truth).max() < 30
+
+    # And the rectified mat must come out the right way up for the player.
+    from mtgtrack.vision.orientation import read_mat_orientation
+
+    verdict = read_mat_orientation(
+        calibration.rectify(frame, straighten=True), calibration.expected_card_size()
+    )
+    assert verdict.upright
+
+
+def test_calibrate_corrects_a_sideways_camera(tmp_path, demo_camera, demo_steps, capsys):
+    from mtgtrack.vision.calibration import MatCalibration
+    from mtgtrack.vision.capture import FrameTransform
+
+    config = Config.from_dict({"cache_dir": str(tmp_path)})
+    config.calibration = str(tmp_path / "calib.json")
+    config_path = config.save(tmp_path / "config.yaml")
+    upright = demo_camera.camera.capture(demo_camera.renderer.render(demo_steps[2].cards))
+    crooked = FrameTransform(rotate=90).apply(upright)
+    image = tmp_path / "crooked.png"
+    cv2.imwrite(str(image), crooked)
+
+    assert main(["-c", str(config_path), "calibrate", "--image", str(image)]) == 0
+    out = capsys.readouterr().out
+    assert "camera correction" in out
+    calibration = MatCalibration.load(tmp_path / "calib.json")
+    assert calibration.transform.rotate in (90, 270)
+    # The stored calibration must rectify the crooked frame into a landscape mat.
+    rectified = calibration.rectify(crooked, straighten=True)
+    assert rectified.shape[1] > rectified.shape[0]
+
+
+def test_calibrate_falls_back_to_the_whole_frame(tmp_path):
+    from mtgtrack.vision.calibration import MatCalibration
+
+    config = Config.from_dict({"cache_dir": str(tmp_path)})
+    config.calibration = str(tmp_path / "calib.json")
+    config_path = config.save(tmp_path / "config.yaml")
+    image = tmp_path / "blank.png"
+    cv2.imwrite(str(image), _blank())
+    assert main([
+        "-c", str(config_path), "calibrate", "--image", str(image),
+        "--full-frame", "--rotate", "0",
+    ]) == 0
+    assert MatCalibration.load(tmp_path / "calib.json").source == "full_frame"
+
+
 def test_demo_runs_the_whole_stack(tmp_path, capsys):
     config = Config.from_dict({"cache_dir": str(tmp_path)})
     config.deck.path = str(EXAMPLES / "izzet_murktide.txt")
@@ -120,7 +227,7 @@ def test_demo_runs_the_whole_stack(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "scripted game" in out
     assert "final tracked state" in out
-    assert "opponent takes a turn" in out
+    assert "AI seats take their turns" in out
 
 
 # --------------------------------------------------------------- dashboard
@@ -143,7 +250,7 @@ def dashboard(deck, demo_camera, card_index, tmp_path):
     engine = GameEngine(deck, card_width_px=demo_camera.card_width)
     session = Session(
         config, deck, card_index, demo_camera.layout, demo_camera.calibration,
-        engine, BuiltinAI(deck, AIConfig(seed=1)), pipeline,
+        engine, [BuiltinAI(deck, AIConfig(seed=1))], pipeline,
     )
     loop = GameLoop(session, ListSource([]))
     loop.start_game()
@@ -170,6 +277,26 @@ def test_dashboard_can_drive_the_opponent(dashboard):
     client, _ = dashboard
     data = client.post("/api/turn/opponent").json()
     assert data["opponent_actions"], "the opponent did nothing"
+
+
+def test_dashboard_reports_every_seat(dashboard):
+    client, _ = dashboard
+    data = client.get("/api/state").json()
+    assert [s["seat"] for s in data["state"]["seats"]] == [0, 1]
+    assert data["opponents"][0]["seat"] == 1
+    assert data["rules"]["starting_life"] == 20
+
+
+def test_dashboard_runs_a_whole_ai_round(dashboard):
+    client, _ = dashboard
+    data = client.post("/api/turn/round").json()
+    assert data["opponent_actions"]
+
+
+def test_dashboard_sets_life_by_seat(dashboard):
+    client, _ = dashboard
+    data = client.post("/api/life/1/33").json()
+    assert data["state"]["seats"][1]["life"] == 33
 
 
 def test_dashboard_life_and_phase_controls(dashboard):

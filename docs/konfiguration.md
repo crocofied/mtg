@@ -19,18 +19,22 @@ mat:
   layout: solo         # solo | versus | Pfad zu einer Layout-JSON
   size: [1400, 815]    # Auflösung des entzerrten Mattenbilds
   mm: [610.0, 355.0]   # physische Mattengröße, bestimmt die erwartete Kartengröße
-  recalibrate_every: 0 # >0: alle N Bilder die ArUco-Marker neu einlesen
+  recalibrate_every: 0 # >0: alle N Bilder die Matte neu suchen (mit oder ohne Marker)
 
 deck:
-  path: ~/decks/murktide.txt
-  format: modern
-  index: ""            # abweichender Pfad für den Erkennungsindex
+  path: ~/decks/meins.txt   # DEINE Liste - nur die wird von der Kamera gesehen
+  format: modern            # modern | standard | pioneer | legacy | commander | ...
+  index: ""                 # abweichender Pfad für den Erkennungsindex
 
 opponent:
   engine: builtin      # builtin | forge | none
   deck: ""             # Deck der KI; leer = Spiegel deines Decks
+  decks:               # mehrere Listen = mehrere KI-Gegner (Commander)
+    - ~/decks/bot1.txt
+    - ~/decks/bot2.txt
+    - ~/decks/bot3.txt
   host: 127.0.0.1
-  port: 8731
+  port: 8731           # bei mehreren Bridge-Gegnern: Port + Sitzplatz
   skill: 0.85          # 0 = spielt absichtlich schlecht, 1 = so gut sie kann
   seed: null           # feste Zahl macht die KI reproduzierbar
   fallback: true
@@ -103,6 +107,29 @@ inference:
   infer_attacks: true      # getappte Kreaturen als Angreifer werten
   report_mana: true        # bei jeder Poolveränderung ein Ereignis senden
 ```
+
+## Kamera und Kalibrierung
+
+`rotate` und `flip` gehören eigentlich zur Kalibrierung, nicht zur
+Konfiguration: die vier Mattenecken wurden ja *auf einem geraderückten Bild*
+gemessen und sind ohne diese Drehung sinnlos. `mtgtrack calibrate` schreibt sie
+deshalb mit in `calibration.json`, und `rotate: -1` bedeutet „nimm, was dort
+steht". Setz hier nur dann etwas, wenn du die Kamera umgehängt hast, ohne neu zu
+kalibrieren — dann warnt das Programm auch, dass beides nicht mehr zusammenpasst.
+
+## Formate und Sitzplätze
+
+Das Format bestimmt Decklegalität, Startleben und die Zahl der Sitzplätze:
+
+| Format | Deck | Leben | Spieler | Besonderheit |
+| --- | --- | --- | --- | --- |
+| modern, standard, pioneer, legacy, vintage, pauper | 60+, max. 4 Kopien | 20 | 2 | 15 Sideboard |
+| commander (edh) | genau 100, Singleton | 40 | 4 | Kommandozone, Steuer, Commander-Schaden |
+| brawl | genau 60, Singleton | 25 | 4 | Kommandozone |
+| casual | 40+ | 20 | 2 | keine Kopienbeschränkung |
+
+Gibst du für Commander weniger als drei Gegnerdecks an, spiegeln die freien
+Sitze dein eigenes Deck.
 
 ## Umgebungsvariablen
 

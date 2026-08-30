@@ -111,8 +111,16 @@ def create_app(loop: GameLoop, broadcaster: Broadcaster | None = None) -> FastAP
         return JSONResponse(payload)
 
     @app.post("/api/turn/opponent")
-    async def opponent_turn() -> JSONResponse:
-        actions = [a.to_dict() for a in loop.opponent_turn()]
+    async def opponent_turn(seat: int | None = None) -> JSONResponse:
+        actions = [a.to_dict() for a in loop.opponent_turn(seat)]
+        payload = _snapshot(loop) | {"opponent_actions": actions}
+        bus.publish(payload)
+        return JSONResponse(payload)
+
+    @app.post("/api/turn/round")
+    async def opponent_round() -> JSONResponse:
+        """Every AI takes its turn -- the rest of a Commander round."""
+        actions = [a.to_dict() for a in loop.opponent_round()]
         payload = _snapshot(loop) | {"opponent_actions": actions}
         bus.publish(payload)
         return JSONResponse(payload)
@@ -126,8 +134,21 @@ def create_app(loop: GameLoop, broadcaster: Broadcaster | None = None) -> FastAP
 
     @app.post("/api/life/{side}/{value}")
     async def set_life(side: str, value: int) -> JSONResponse:
-        owner = Owner.OPPONENT if side == "opponent" else Owner.PLAYER
-        loop.session.engine.set_life(owner, value)
+        """``side`` is a seat number, or "player"/"opponent" for a 1v1 game."""
+        engine = loop.session.engine
+        state = engine.state
+        if side.isdigit():
+            seat = min(int(side), len(state.seats) - 1)
+        else:
+            seat = 0 if side == "player" else 1
+        if seat == 0:
+            engine.set_life(Owner.PLAYER, value)
+        else:
+            state.seats[seat].life = value
+            engine.record_opponent_action(
+                f"{state.seats[seat].name} is on {value} life", seat=seat
+            )
+        state.check_losses()
         payload = _snapshot(loop)
         bus.publish(payload)
         return JSONResponse(payload)
@@ -135,8 +156,8 @@ def create_app(loop: GameLoop, broadcaster: Broadcaster | None = None) -> FastAP
     @app.post("/api/game/restart")
     async def restart() -> JSONResponse:
         loop.session.engine.start_game()
-        if loop.session.opponent is not None:
-            loop.session.opponent.start(loop.session.engine.state)
+        for opponent in loop.session.opponents:
+            opponent.start(loop.session.engine.state)
         payload = _snapshot(loop)
         bus.publish(payload)
         return JSONResponse(payload)
@@ -170,7 +191,17 @@ def _snapshot(loop: GameLoop) -> dict[str, Any]:
         "engine": session.opponent.name if session.opponent else "none",
         "connected": getattr(session.opponent, "connected", True),
         "fallback": getattr(session.opponent, "using_fallback", False),
+        "count": len(session.opponents),
     }
+    data["opponents"] = [
+        {
+            "seat": seat,
+            "engine": engine.name,
+            "connected": getattr(engine, "connected", True),
+            "fallback": getattr(engine, "using_fallback", False),
+        }
+        for seat, engine in enumerate(session.opponents, start=1)
+    ]
     return data
 
 

@@ -26,9 +26,10 @@ from .deck.scryfall import ScryfallClient
 from .engine.game import EngineConfig, GameEngine
 from .indexing import load_or_build_index
 from .models.events import EventType, GameEvent
+from .models.formats import rules_for
 from .models.zones import Owner
 from .vision.calibration import MatCalibration
-from .vision.capture import FrameSource, open_source
+from .vision.capture import FrameSource, FrameTransform, open_source
 from .vision.mat import MatLayout, card_px, default_layout
 from .vision.pipeline import Observation, VisionPipeline
 from .vision.recognize import CardIndex
@@ -50,12 +51,21 @@ class Session:
     layout: MatLayout
     calibration: MatCalibration
     engine: GameEngine
-    opponent: OpponentEngine | None
+    opponents: list[OpponentEngine]
     pipeline: VisionPipeline
+
+    @property
+    def opponent(self) -> OpponentEngine | None:
+        """The first AI -- all a two-player game ever needs."""
+        return self.opponents[0] if self.opponents else None
 
     @property
     def card_width(self) -> float:
         return self.calibration.expected_card_size()[0]
+
+    def opponent_at(self, seat: int) -> OpponentEngine | None:
+        index = seat - 1
+        return self.opponents[index] if 0 <= index < len(self.opponents) else None
 
 
 def card_source(config: Config, offline: bool = False) -> Any:
@@ -104,37 +114,88 @@ def load_calibration(config: Config) -> MatCalibration:
         raise SetupError(
             f"no calibration at {path}. Run `mtgtrack calibrate` once with the mat in view."
         )
-    return MatCalibration.load(path)
+    calibration = MatCalibration.load(path)
+    wanted = camera_transform(config, calibration)
+    if wanted != calibration.transform:
+        log.warning(
+            "config says the camera is %s but the calibration was measured with %s; "
+            "re-run `mtgtrack calibrate` if the zones look wrong",
+            wanted.describe(),
+            calibration.transform.describe(),
+        )
+    return calibration
+
+
+def opponent_deck_paths(config: Config) -> list[str]:
+    """The configured AI decklists, however they were spelled."""
+    if config.opponent.decks:
+        return [p for p in config.opponent.decks if p]
+    return [config.opponent.deck] if config.opponent.deck else []
+
+
+def load_opponent_decks(config: Config, own_deck: Deck, offline: bool = False) -> list[Deck]:
+    """One deck per AI seat.
+
+    With nothing configured the AI mirrors the player's deck, which is a fine
+    way to start.  The format decides how many seats there are, so a Commander
+    game fills any it was not given a list for.
+    """
+    decks: list[Deck] = []
+    for spec in opponent_deck_paths(config):
+        path = Path(spec).expanduser()
+        if not path.exists():
+            raise SetupError(f"opponent decklist not found: {path}")
+        decks.append(
+            Deck.load(path)
+            if path.suffix.lower() == ".json"
+            else load_and_resolve(
+                path, card_source(config, offline), name=path.stem, format=config.deck.format
+            )
+        )
+    rules = rules_for(config.deck.format)
+    while len(decks) < rules.default_players - 1:
+        decks.append(own_deck)
+    return decks[: rules.max_players - 1]
+
+
+def build_opponents(
+    config: Config, decks: list[Deck], offline: bool = False
+) -> list[OpponentEngine]:
+    """One engine per AI seat, seat 1 upwards."""
+    kind = config.opponent.engine.lower()
+    if kind in ("none", "off", ""):
+        return []
+
+    engines: list[OpponentEngine] = []
+    for index, deck in enumerate(decks):
+        seat = index + 1
+        ai_config = AIConfig(skill=config.opponent.skill, seed=config.opponent.seed)
+        builtin = BuiltinAI(deck, ai_config, seat=seat)
+        if kind == "builtin":
+            engines.append(builtin)
+        elif kind in ("forge", "bridge"):
+            engines.append(
+                ForgeBridge(
+                    deck,
+                    BridgeConfig(
+                        host=config.opponent.host,
+                        # One port per seat, so several adapters can run at once.
+                        port=config.opponent.port + index,
+                        fallback_on_error=config.opponent.fallback,
+                    ),
+                    fallback=builtin if config.opponent.fallback else None,
+                )
+            )
+        else:
+            raise SetupError(f"unknown opponent engine {config.opponent.engine!r}")
+    return engines
 
 
 def build_opponent(config: Config, own_deck: Deck, offline: bool = False) -> OpponentEngine | None:
-    """Create the configured opponent, mirroring our deck if none is given."""
-    kind = config.opponent.engine.lower()
-    if kind in ("none", "off", ""):
-        return None
-    deck = own_deck
-    if config.opponent.deck:
-        path = Path(config.opponent.deck).expanduser()
-        deck = (
-            Deck.load(path)
-            if path.suffix.lower() == ".json"
-            else load_and_resolve(path, card_source(config, offline), format=config.deck.format)
-        )
-    ai_config = AIConfig(skill=config.opponent.skill, seed=config.opponent.seed)
-    builtin = BuiltinAI(deck, ai_config)
-    if kind == "builtin":
-        return builtin
-    if kind in ("forge", "bridge"):
-        return ForgeBridge(
-            deck,
-            BridgeConfig(
-                host=config.opponent.host,
-                port=config.opponent.port,
-                fallback_on_error=config.opponent.fallback,
-            ),
-            fallback=builtin if config.opponent.fallback else None,
-        )
-    raise SetupError(f"unknown opponent engine {config.opponent.engine!r}")
+    """Backwards-compatible single-opponent helper."""
+    decks = load_opponent_decks(config, own_deck, offline)
+    engines = build_opponents(config, decks, offline)
+    return engines[0] if engines else None
 
 
 def build_session(config: Config, offline: bool = False, rebuild_index: bool = False) -> Session:
@@ -145,6 +206,7 @@ def build_session(config: Config, offline: bool = False, rebuild_index: bool = F
         log.warning("deck: %s", problem)
     layout = load_layout(config)
     calibration = load_calibration(config)
+    # Only the human is scanned, so only the human's deck needs an index.
     index, report = load_or_build_index(
         deck, config.index_path, card_source(config, offline), rebuild=rebuild_index
     )
@@ -152,13 +214,19 @@ def build_session(config: Config, offline: bool = False, rebuild_index: bool = F
         for line in report.summary().splitlines():
             log.info("index: %s", line)
     pipeline = VisionPipeline(calibration, index, layout, config.pipeline, config.detector)
+
+    opponent_decks = load_opponent_decks(config, deck, offline)
+    for opponent_deck in opponent_decks:
+        for problem in opponent_deck.validate():
+            log.warning("opponent deck %s: %s", opponent_deck.name, problem)
     engine = GameEngine(
         deck,
         card_width_px=calibration.expected_card_size()[0],
         config=EngineConfig(tracker=config.tracker, inference=config.inference),
+        opponent_decks=opponent_decks,
     )
-    opponent = build_opponent(config, deck, offline)
-    return Session(config, deck, index, layout, calibration, engine, opponent, pipeline)
+    opponents = build_opponents(config, opponent_decks, offline)
+    return Session(config, deck, index, layout, calibration, engine, opponents, pipeline)
 
 
 @dataclass
@@ -181,9 +249,9 @@ class GameLoop:
     # ------------------------------------------------------------------ main
     def start_game(self) -> None:
         self.session.engine.start_game()
-        if self.session.opponent is not None:
-            actions = self.session.opponent.start(self.session.engine.state)
-            self._publish_opponent(actions)
+        state = self.session.engine.state
+        for seat, opponent in enumerate(self.session.opponents, start=1):
+            self._publish_opponent(opponent.start(state), seat)
 
     def run(self, max_frames: int | None = None) -> None:
         """Process frames until the source runs dry or :meth:`stop` is called."""
@@ -222,30 +290,47 @@ class GameLoop:
 
     # ------------------------------------------------------------- opponent
     def _react(self, event: GameEvent) -> None:
-        opponent = self.session.opponent
-        if opponent is None:
+        """Let every AI see what happened, and answer if it wants to."""
+        if not self.session.opponents:
             return
-        if isinstance(opponent, ForgeBridge):
-            opponent.send_event(event)
-        if event.type in (EventType.SPELL_CAST, EventType.ATTACK_DECLARED):
-            actions = opponent.respond(self.session.engine.state, event)
-            self._publish_opponent(actions)
-        elif event.type is EventType.TURN_BEGIN and event.owner is Owner.OPPONENT:
-            self.opponent_turn()
+        state = self.session.engine.state
+        for seat, opponent in enumerate(self.session.opponents, start=1):
+            if isinstance(opponent, ForgeBridge):
+                opponent.send_event(event)
+            if event.type in (EventType.SPELL_CAST, EventType.ATTACK_DECLARED):
+                self._publish_opponent(opponent.respond(state, event), seat)
+        if event.type is EventType.TURN_BEGIN:
+            seat = int(event.detail.get("seat", 1 if event.owner is Owner.OPPONENT else 0))
+            if seat != 0:
+                self.opponent_turn(seat)
 
-    def opponent_turn(self) -> list[OpponentAction]:
-        """Let the opponent play a full turn."""
-        opponent = self.session.opponent
+    def opponent_turn(self, seat: int | None = None) -> list[OpponentAction]:
+        """Let one AI play a full turn; defaults to whoever is on turn."""
+        state = self.session.engine.state
+        if seat is None:
+            seat = state.active_seat if state.active_seat != 0 else 1
+        opponent = self.session.opponent_at(seat)
         if opponent is None:
             return []
-        actions = opponent.take_turn(self.session.engine.state)
-        self._publish_opponent(actions)
+        actions = opponent.take_turn(state)
+        self._publish_opponent(actions, seat)
+        state.check_losses()
         return actions
 
-    def _publish_opponent(self, actions: Iterable[OpponentAction]) -> None:
+    def opponent_round(self) -> list[OpponentAction]:
+        """Every AI takes a turn, in seat order -- the rest of a Commander round."""
+        actions: list[OpponentAction] = []
+        for seat in range(1, len(self.session.opponents) + 1):
+            self.session.engine.next_turn(seat=seat)
+            actions.extend(self.opponent_turn(seat))
+        return actions
+
+    def _publish_opponent(self, actions: Iterable[OpponentAction], seat: int = 1) -> None:
         actions = list(actions)
         for action in actions:
-            self.session.engine.record_opponent_action(action.describe(), action.to_dict())
+            self.session.engine.record_opponent_action(
+                action.describe(), action.to_dict(), seat=seat
+            )
         if actions and self.on_opponent is not None:
             self.on_opponent(actions)
 
@@ -255,14 +340,30 @@ class GameLoop:
     def close(self) -> None:
         self.stop()
         self.source.release()
-        if self.session.opponent is not None:
-            self.session.opponent.close()
+        for opponent in self.session.opponents:
+            opponent.close()
 
 
-def open_camera(config: Config) -> FrameSource:
-    """Open the configured capture source."""
+def camera_transform(config: Config, calibration: MatCalibration | None = None) -> FrameTransform:
+    """How to straighten the camera.
+
+    `mtgtrack calibrate` measures this and stores it with the homography, so the
+    config only has to override it when the camera is remounted without
+    recalibrating.  The two cannot disagree silently: the corners in the
+    calibration were measured on a frame straightened this exact way.
+    """
+    if config.camera.rotate < 0:
+        if calibration is not None:
+            return calibration.transform
+        return FrameTransform(flip=config.camera.flip)
+    return FrameTransform(rotate=config.camera.rotate, flip=config.camera.flip)
+
+
+def open_camera(config: Config, calibration: MatCalibration | None = None) -> FrameSource:
+    """Open the configured capture source, straightened."""
     return open_source(
         config.camera.source,
+        transform=camera_transform(config, calibration),
         width=config.camera.width,
         height=config.camera.height,
         fps=config.camera.fps,

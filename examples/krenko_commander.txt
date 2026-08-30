@@ -1,0 +1,57 @@
+# Krenko Goblins - offline Commander demo list
+
+Commander
+1 Krenko, Mob Boss
+
+Deck
+1 Abrade
+1 Arcane Signet
+1 Beetleback Chief
+1 Blasphemous Act
+1 Blood Moon
+1 Chandra, Torch of Defiance
+1 Chaos Warp
+1 Command Tower
+1 Commander's Sphere
+1 Dragon Fodder
+1 Dragon's Rage Channeler
+1 Engineered Explosives
+1 Faithless Looting
+1 Flametongue Kavu
+1 Goblin Bombardment
+1 Goblin Chieftain
+1 Goblin Instigator
+1 Goblin King
+1 Goblin Matron
+1 Goblin Piledriver
+1 Goblin Rabblemaster
+1 Goblin Trashmaster
+1 Goblin Warchief
+1 Great Furnace
+1 Impact Tremors
+1 Krenko's Command
+1 Legion Warboss
+1 Lightning Bolt
+1 Mishra's Bauble
+1 Mogg War Marshal
+1 Otawara, Soaring City
+1 Pashalik Mons
+1 Purphoros, God of the Forge
+1 Ragavan, Nimble Pilferer
+1 Rogue's Passage
+1 Ruby Medallion
+1 Rundvelt Hordemaster
+1 Scalding Tarn
+1 Shattergang Brothers
+1 Shatterskull Smashing
+1 Siege-Gang Commander
+1 Skirk Prospector
+1 Sol Ring
+1 Spirebluff Canal
+1 Steam Vents
+1 Thought Vessel
+1 Unholy Heat
+1 Vandalblast
+1 Wheel of Fortune
+1 Wooded Foothills
+49 Mountain

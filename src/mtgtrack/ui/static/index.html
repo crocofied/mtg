@@ -64,15 +64,14 @@
   <h1>mtgtrack</h1>
   <span class="pill">Zug <b id="turn">–</b></span>
   <span class="pill">Phase <b id="phase">–</b></span>
-  <span class="pill">Du <b id="life-player">20</b></span>
-  <span class="pill">Gegner <b id="life-opponent">20</b></span>
   <span class="pill">Bibliothek <b id="library">–</b></span>
+  <span id="seat-pills" class="row" style="gap:6px"></span>
   <span class="pill" id="vision">–</span>
   <span class="pill" id="opponent-engine">–</span>
   <span style="flex:1"></span>
   <div class="row">
     <button onclick="post('/api/turn/next')">Zug beenden</button>
-    <button onclick="post('/api/turn/opponent')">Gegner ziehen lassen</button>
+    <button onclick="post('/api/turn/round')" id="btn-round">KIs ziehen lassen</button>
     <button onclick="post('/api/game/restart')">Neues Spiel</button>
   </div>
 </header>
@@ -116,9 +115,9 @@
 <script>
 const ZONE_LABELS = {
   hand:"Hand", lands:"Länder", battlefield:"Schlachtfeld",
-  graveyard:"Friedhof", exile:"Exil", stack:"Stapel"
+  graveyard:"Friedhof", exile:"Exil", stack:"Stapel", command:"Kommandozone"
 };
-const ZONE_ORDER = ["hand","lands","battlefield","stack","graveyard","exile"];
+const ZONE_ORDER = ["hand","command","lands","battlefield","stack","graveyard","exile"];
 let castable = new Set();
 
 function el(tag, cls, text){ const e=document.createElement(tag); if(cls)e.className=cls;
@@ -194,10 +193,10 @@ function describe(e){
     case "returned_to_hand": return `${n} → Hand`;
     case "tapped": return `${n} getappt`;
     case "untapped": return `${n} enttappt`;
-    case "turn_begin": return `——— Zug ${e.turn} (${who}) ———`;
+    case "turn_begin": return `——— Zug ${e.turn} (${e.detail?.name || who}) ———`;
     case "attack_declared": return `${who} greift an mit ${(e.detail?.attackers||[]).join(", ")}`;
     case "mana_available": return `Mana: ${e.detail?.pool||""}`;
-    case "opponent_action": return `Gegner: ${e.detail?.text||""}`;
+    case "opponent_action": return `${e.detail?.name || "Gegner"}: ${e.detail?.text||""}`;
     case "state_desync": return `⚠ ${n}: ${e.detail?.seen}× gesehen, ${e.detail?.in_deck}× im Deck`;
     case "game_start": return "Spiel gestartet";
     case "life_changed": return `${who}: ${e.detail?.life} Leben`;
@@ -205,22 +204,70 @@ function describe(e){
   }
 }
 
+function renderSeats(state){
+  const host = document.getElementById("seat-pills");
+  host.innerHTML = "";
+  (state.seats || []).forEach(seat => {
+    const pill = el("span", "pill" + (seat.lost ? " offline" : ""));
+    const active = seat.seat === state.active_seat ? "▶ " : "";
+    pill.appendChild(el("span", null, active + shortName(seat)));
+    pill.appendChild(el("b", null, " " + seat.life));
+    if(seat.commander) pill.title = "Kommandeur: " + seat.commander;
+    if(seat.lost) pill.title = "ausgeschieden";
+    host.appendChild(pill);
+  });
+}
+
+function shortName(seat){
+  if(seat.seat === 0) return "Du";
+  const name = seat.name || ("KI " + seat.seat);
+  return name.length > 18 ? name.slice(0, 17) + "…" : name;
+}
+
+function renderOpponentBoards(state){
+  const board = document.getElementById("opponent-board");
+  board.innerHTML = "";
+  (state.seats || []).filter(s => s.seat !== 0).forEach(seat => {
+    const head = el("h3");
+    head.appendChild(el("span", null, shortName(seat) + (seat.lost ? " (raus)" : "")));
+    head.appendChild(el("span", null, `${seat.life} Leben`));
+    const box = el("div", "zone");
+    box.appendChild(head);
+    let any = false;
+    ["battlefield","lands","command","graveyard"].forEach(zone => {
+      const cards = (seat.zones || {})[zone] || [];
+      if(!cards.length) return;
+      any = true;
+      const list = el("div","cards");
+      list.appendChild(el("span","empty", ZONE_LABELS[zone] + ":"));
+      cards.forEach(c => list.appendChild(cardChip(c)));
+      box.appendChild(list);
+    });
+    if(!any) box.appendChild(el("span","empty","leeres Board"));
+    board.appendChild(box);
+  });
+  if(!board.children.length) board.appendChild(el("span","empty","kein Gegner"));
+}
+
 function apply(data){
   if(!data || !data.state) return;
   const s = data.state;
   document.getElementById("turn").textContent = s.turn;
   document.getElementById("phase").textContent = s.phase;
-  document.getElementById("life-player").textContent = s.player.life;
-  document.getElementById("life-opponent").textContent = s.opponent.life;
   document.getElementById("library").textContent = s.player.library_count;
+  renderSeats(s);
+  const round = document.getElementById("btn-round");
+  if(round) round.textContent = (s.seats||[]).length > 2 ? "KIs ziehen lassen" : "Gegner ziehen lassen";
 
   const v = data.vision || {};
   document.getElementById("vision").innerHTML =
     `Sicht <b>${v.identified||0}/${v.cards_seen||0}</b>` + (v.stable===false?" · Bewegung":"");
   const o = data.opponent || {};
   const eng = document.getElementById("opponent-engine");
-  eng.innerHTML = `Gegner <b>${o.engine||"–"}</b>` + (o.fallback?" (Fallback)":"");
-  eng.classList.toggle("offline", o.connected===false && !o.fallback);
+  const count = (data.opponents||[]).length;
+  eng.innerHTML = `Gegner <b>${o.engine||"–"}</b>` + (count>1?` ×${count}`:"")
+    + ((data.opponents||[]).some(x=>x.fallback)?" (Fallback)":"");
+  eng.classList.toggle("offline", (data.opponents||[]).some(x=>x.connected===false && !x.fallback));
 
   castable = new Set(data.castable||[]);
   renderZones(s.player);
@@ -231,20 +278,7 @@ function apply(data){
   (data.castable||[]).forEach(name => cast.appendChild(cardChip({name, castable:true})));
   if(!(data.castable||[]).length) cast.appendChild(el("span","empty","nichts bezahlbar"));
 
-  const board = document.getElementById("opponent-board");
-  const opp = s.opponent.zones || {};
-  board.innerHTML = "";
-  ["battlefield","lands","graveyard"].forEach(z=>{
-    const cards = opp[z]||[];
-    if(!cards.length) return;
-    const box = el("div","zone");
-    const h = el("h3"); h.appendChild(el("span",null,ZONE_LABELS[z]));
-    h.appendChild(el("span",null,String(cards.length))); box.appendChild(h);
-    const list = el("div","cards"); cards.forEach(c=>list.appendChild(cardChip(c)));
-    box.appendChild(list); board.appendChild(box);
-  });
-  if(!board.children.length) board.appendChild(el("span","empty","leeres Board"));
-
+  renderOpponentBoards(s);
   renderLog(data.events||[]);
 }
 

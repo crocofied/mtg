@@ -237,6 +237,10 @@ class FakeCamera:
     #: Fraction of the frame left empty around the mat.  Calibration markers
     #: are stamped into that border, so it has to be wide enough to hold them.
     margin: tuple[float, float] = (0.08, 0.14)
+    #: The table the mat lies on.  Markerless calibration has to separate the
+    #: two, so a near-black void here would make that test meaningless.
+    table_colour: tuple[int, int, int] = (78, 96, 116)
+    table_texture: float = 6.0
     #: How far the mat corners are pulled around inside the frame.
     perspective: float = 0.06
     noise: float = 3.0
@@ -245,8 +249,18 @@ class FakeCamera:
     seed: int = 7
 
     def __post_init__(self) -> None:
+        self.reset()
+
+    def reset(self) -> None:
+        """Rewind the noise generator.
+
+        Frames are deliberately not identical -- a real sensor's noise differs
+        every frame -- but a test that wants a reproducible sequence has to be
+        able to start from the beginning.
+        """
         self._rng = np.random.default_rng(self.seed)
         self._corners = self._make_corners()
+        self._gain_cache = None
 
     def _make_corners(self) -> np.ndarray:
         fw, fh = self.frame_size
@@ -279,7 +293,10 @@ class FakeCamera:
         h, w = mat_image.shape[:2]
         src = np.array([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]], dtype=np.float32)
         matrix = cv2.getPerspectiveTransform(src, self._corners)
-        frame = np.full((fh, fw, 3), 24, dtype=np.uint8)
+        frame = np.full((fh, fw, 3), self.table_colour, dtype=np.uint8)
+        if self.table_texture > 0:
+            grain = self._rng.normal(0, self.table_texture, (fh, fw, 1))
+            frame = np.clip(frame.astype(np.float32) + grain, 0, 255).astype(np.uint8)
         cv2.warpPerspective(
             mat_image, matrix, (fw, fh), dst=frame, borderMode=cv2.BORDER_TRANSPARENT
         )

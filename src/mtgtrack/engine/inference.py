@@ -119,6 +119,14 @@ MOVE_EVENTS: dict[tuple[Zone | None, Zone], EventType] = {
     (Zone.LIBRARY, Zone.BATTLEFIELD): EventType.PERMANENT_ENTERED,
     (Zone.LIBRARY, Zone.GRAVEYARD): EventType.DIED,
     (Zone.LIBRARY, Zone.EXILE): EventType.EXILED,
+    # Commander: the general is cast from its own zone and returns there.
+    (Zone.COMMAND, Zone.BATTLEFIELD): EventType.PERMANENT_ENTERED,
+    (Zone.COMMAND, Zone.STACK): EventType.SPELL_CAST,
+    (Zone.COMMAND, Zone.LANDS): EventType.PERMANENT_ENTERED,
+    (Zone.BATTLEFIELD, Zone.COMMAND): EventType.PERMANENT_LEFT,
+    (Zone.LANDS, Zone.COMMAND): EventType.PERMANENT_LEFT,
+    (Zone.GRAVEYARD, Zone.COMMAND): EventType.ZONE_CHANGE,
+    (Zone.EXILE, Zone.COMMAND): EventType.ZONE_CHANGE,
 }
 
 

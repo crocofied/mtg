@@ -472,6 +472,851 @@
    "collector_number": "0",
    "image_uri": "",
    "layout": "normal"
+  },
+  {
+   "name": "Krenko, Mob Boss",
+   "mana_cost": "{2}{R}{R}",
+   "cmc": 4,
+   "type_line": "Legendary Creature \u2014 Goblin Warrior",
+   "oracle_text": "{T}: Create X 1/1 red Goblin creature tokens, where X is the number of Goblins you control.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "3",
+   "toughness": "3",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Goblin Chieftain",
+   "mana_cost": "{1}{R}{R}",
+   "cmc": 3,
+   "type_line": "Creature \u2014 Goblin Lord",
+   "oracle_text": "Haste. Other Goblins you control get +1/+1 and have haste.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "2",
+   "toughness": "2",
+   "produced_mana": [],
+   "keywords": [
+    "Haste"
+   ],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Goblin Warchief",
+   "mana_cost": "{1}{R}{R}",
+   "cmc": 3,
+   "type_line": "Creature \u2014 Goblin Warrior",
+   "oracle_text": "Goblin spells you cast cost {1} less to cast.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "2",
+   "toughness": "2",
+   "produced_mana": [],
+   "keywords": [
+    "Haste"
+   ],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Goblin Rabblemaster",
+   "mana_cost": "{2}{R}",
+   "cmc": 3,
+   "type_line": "Creature \u2014 Goblin Warrior",
+   "oracle_text": "At the beginning of combat on your turn, create a 1/1 red Goblin creature token.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "2",
+   "toughness": "2",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Legion Warboss",
+   "mana_cost": "{2}{R}",
+   "cmc": 3,
+   "type_line": "Creature \u2014 Goblin Warrior",
+   "oracle_text": "Mentor. At the beginning of combat on your turn, create a 1/1 red Goblin.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "2",
+   "toughness": "2",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Goblin Matron",
+   "mana_cost": "{2}{R}",
+   "cmc": 3,
+   "type_line": "Creature \u2014 Goblin",
+   "oracle_text": "When Goblin Matron enters, search your library for a Goblin card.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "1",
+   "toughness": "1",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Skirk Prospector",
+   "mana_cost": "{R}",
+   "cmc": 1,
+   "type_line": "Creature \u2014 Goblin",
+   "oracle_text": "Sacrifice a Goblin: Add {R}.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "1",
+   "toughness": "1",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Mogg War Marshal",
+   "mana_cost": "{1}{R}",
+   "cmc": 2,
+   "type_line": "Creature \u2014 Goblin Warrior",
+   "oracle_text": "Echo. When it enters or dies, create a 1/1 red Goblin.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "1",
+   "toughness": "1",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Krenko's Command",
+   "mana_cost": "{1}{R}",
+   "cmc": 2,
+   "type_line": "Sorcery",
+   "oracle_text": "Create two 1/1 red Goblin creature tokens.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Dragon Fodder",
+   "mana_cost": "{1}{R}",
+   "cmc": 2,
+   "type_line": "Sorcery",
+   "oracle_text": "Create two 1/1 red Goblin creature tokens.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Chandra, Torch of Defiance",
+   "mana_cost": "{2}{R}{R}",
+   "cmc": 4,
+   "type_line": "Legendary Planeswalker \u2014 Chandra",
+   "oracle_text": "Chandra deals 4 damage to target creature.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Shatterskull Smashing",
+   "mana_cost": "{X}{R}{R}",
+   "cmc": 2,
+   "type_line": "Sorcery",
+   "oracle_text": "Shatterskull Smashing deals X damage divided among up to two target creatures.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Chaos Warp",
+   "mana_cost": "{2}{R}",
+   "cmc": 3,
+   "type_line": "Instant",
+   "oracle_text": "The owner of target permanent shuffles it into their library.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Vandalblast",
+   "mana_cost": "{R}",
+   "cmc": 1,
+   "type_line": "Sorcery",
+   "oracle_text": "Destroy target artifact you don't control.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Abrade",
+   "mana_cost": "{1}{R}",
+   "cmc": 2,
+   "type_line": "Instant",
+   "oracle_text": "Abrade deals 3 damage to target creature.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Flametongue Kavu",
+   "mana_cost": "{3}{R}",
+   "cmc": 4,
+   "type_line": "Creature \u2014 Kavu",
+   "oracle_text": "When Flametongue Kavu enters, it deals 4 damage to target creature.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "4",
+   "toughness": "2",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Goblin Bombardment",
+   "mana_cost": "{1}{R}",
+   "cmc": 2,
+   "type_line": "Enchantment",
+   "oracle_text": "Sacrifice a creature: it deals 1 damage to any target.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Impact Tremors",
+   "mana_cost": "{1}{R}",
+   "cmc": 2,
+   "type_line": "Enchantment",
+   "oracle_text": "Whenever a creature you control enters, it deals 1 damage to each opponent.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Purphoros, God of the Forge",
+   "mana_cost": "{3}{R}",
+   "cmc": 4,
+   "type_line": "Legendary Enchantment Creature \u2014 God",
+   "oracle_text": "Whenever another creature you control enters, it deals 2 damage to each opponent.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "6",
+   "toughness": "5",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Sol Ring",
+   "mana_cost": "{1}",
+   "cmc": 1,
+   "type_line": "Artifact",
+   "oracle_text": "{T}: Add {C}{C}.",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [
+    "C"
+   ],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Arcane Signet",
+   "mana_cost": "{2}",
+   "cmc": 2,
+   "type_line": "Artifact",
+   "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [
+    "R"
+   ],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Thought Vessel",
+   "mana_cost": "{2}",
+   "cmc": 2,
+   "type_line": "Artifact",
+   "oracle_text": "You have no maximum hand size. {T}: Add {C}.",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [
+    "C"
+   ],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Ruby Medallion",
+   "mana_cost": "{2}",
+   "cmc": 2,
+   "type_line": "Artifact",
+   "oracle_text": "Red spells you cast cost {1} less to cast.",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Commander's Sphere",
+   "mana_cost": "{3}",
+   "cmc": 3,
+   "type_line": "Artifact",
+   "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [
+    "R"
+   ],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Wheel of Fortune",
+   "mana_cost": "{2}{R}",
+   "cmc": 3,
+   "type_line": "Sorcery",
+   "oracle_text": "Each player discards their hand, then draws seven cards.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Faithless Looting",
+   "mana_cost": "{R}",
+   "cmc": 1,
+   "type_line": "Sorcery",
+   "oracle_text": "Draw two cards, then discard two cards.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Blasphemous Act",
+   "mana_cost": "{8}{R}",
+   "cmc": 9,
+   "type_line": "Sorcery",
+   "oracle_text": "Blasphemous Act deals 13 damage to each creature.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Goblin Piledriver",
+   "mana_cost": "{1}{R}",
+   "cmc": 2,
+   "type_line": "Creature \u2014 Goblin Warrior",
+   "oracle_text": "Protection from blue. Whenever it attacks, it gets +2/+0 for each other attacking Goblin.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "1",
+   "toughness": "2",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Siege-Gang Commander",
+   "mana_cost": "{3}{R}{R}",
+   "cmc": 5,
+   "type_line": "Creature \u2014 Goblin",
+   "oracle_text": "When it enters, create three 1/1 red Goblin tokens.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "2",
+   "toughness": "2",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Goblin King",
+   "mana_cost": "{1}{R}{R}",
+   "cmc": 3,
+   "type_line": "Creature \u2014 Goblin Lord",
+   "oracle_text": "Other Goblins get +1/+1 and have mountainwalk.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "2",
+   "toughness": "2",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Shattergang Brothers",
+   "mana_cost": "{2}{R}",
+   "cmc": 3,
+   "type_line": "Creature \u2014 Goblin Artificer",
+   "oracle_text": "Sacrifice a creature: Each other player sacrifices a creature.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "3",
+   "toughness": "3",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Rundvelt Hordemaster",
+   "mana_cost": "{2}{R}",
+   "cmc": 3,
+   "type_line": "Creature \u2014 Goblin Warrior",
+   "oracle_text": "Whenever a Goblin you control dies, goad target creature.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "2",
+   "toughness": "3",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Goblin Instigator",
+   "mana_cost": "{1}{R}",
+   "cmc": 2,
+   "type_line": "Creature \u2014 Goblin",
+   "oracle_text": "When it enters, create a 1/1 red Goblin creature token.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "1",
+   "toughness": "1",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Beetleback Chief",
+   "mana_cost": "{3}{R}",
+   "cmc": 4,
+   "type_line": "Creature \u2014 Goblin Warrior",
+   "oracle_text": "When it enters, create two 1/1 red Goblin creature tokens.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "2",
+   "toughness": "2",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Goblin Trashmaster",
+   "mana_cost": "{2}{R}{R}",
+   "cmc": 4,
+   "type_line": "Creature \u2014 Goblin",
+   "oracle_text": "Other Goblins get +1/+1. Sacrifice a Goblin: Destroy target artifact.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "3",
+   "toughness": "3",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Pashalik Mons",
+   "mana_cost": "{2}{R}",
+   "cmc": 3,
+   "type_line": "Legendary Creature \u2014 Goblin",
+   "oracle_text": "Whenever Pashalik Mons or another Goblin you control dies, it deals 1 damage to any target.",
+   "colors": [
+    "R"
+   ],
+   "color_identity": [
+    "R"
+   ],
+   "power": "2",
+   "toughness": "2",
+   "produced_mana": [],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Great Furnace",
+   "mana_cost": "",
+   "cmc": 0,
+   "type_line": "Artifact Land",
+   "oracle_text": "{T}: Add {R}.",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [
+    "R"
+   ],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Rogue's Passage",
+   "mana_cost": "",
+   "cmc": 0,
+   "type_line": "Land",
+   "oracle_text": "{T}: Add {C}.",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [
+    "C"
+   ],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
+  },
+  {
+   "name": "Command Tower",
+   "mana_cost": "",
+   "cmc": 0,
+   "type_line": "Land",
+   "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+   "colors": [],
+   "color_identity": [],
+   "power": null,
+   "toughness": null,
+   "produced_mana": [
+    "R"
+   ],
+   "keywords": [],
+   "scryfall_id": "",
+   "set_code": "demo",
+   "collector_number": "0",
+   "image_uri": "",
+   "layout": "normal"
   }
- ]
+ ],
+ "_note": "Simplified card data for offline demos and tests. The application fetches exact oracle data and art from Scryfall when online."
 }

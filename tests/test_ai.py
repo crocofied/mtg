@@ -135,8 +135,9 @@ def test_it_removes_the_biggest_threat(deck):
     small = deck.find("Dragon's Rage Channeler")
     state.player.add(CardInstance(card=small, zone=Zone.BATTLEFIELD))
     threat = state.player.add(CardInstance(card=big, zone=Zone.BATTLEFIELD))
-    victim = ai._best_removal_target(99)
+    victim, owner = ai._best_removal_target(99)
     assert victim is threat
+    assert owner is state.player
 
 
 def test_actions_serialise_for_the_ui(deck):
